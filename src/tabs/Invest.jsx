@@ -64,16 +64,16 @@ function wrapLabel(text, perLine) {
 
 // 꺾은선 그래프: 굵고 부드러운 선 + 점마다 값 표시. 상승 빨강 / 하락 파랑 / 보합 검정
 function PriceChart({ points }) {
-  const W = 1000;
-  const padX = 30;
-  const padT = 34;
-  const plotH = 250;
+  const W = 620;
+  const padX = 24;
+  const padT = 32;
+  const plotH = 230;
   const n = points.length;
   const band = (W - padX * 2) / Math.max(n, 1);
-  const perLine = Math.max(3, Math.floor(band / 15));
+  const perLine = Math.max(3, Math.floor(band / 16));
   const labels = points.map((p) => wrapLabel(p.label, perLine));
   const maxLines = Math.max(1, ...labels.map((l) => l.length));
-  const H = padT + plotH + 16 + maxLines * 16;
+  const H = padT + plotH + 18 + maxLines * 19;
   const [lo, hi, ticks] = niceAxis(points.map((p) => p.y));
   const x = (i) => padX + band * (i + 0.5);
   // 가장 높은/낮은 점이 테두리에 붙지 않게 위아래 여유
@@ -109,11 +109,11 @@ function PriceChart({ points }) {
               <circle cx={x(i)} cy={y(p.y)} r="4.5" fill="#fff" stroke={i > 0 ? colorOf(prev, p.y) : "#9ca3af"} strokeWidth="2">
                 <title>{`${p.label}: ${p.y}`}</title>
               </circle>
-              <text x={x(i)} y={below ? y(p.y) + 22 : y(p.y) - 12} fontSize="15" fontWeight="800" textAnchor="middle" fill="#374151">
+              <text x={x(i)} y={below ? y(p.y) + 25 : y(p.y) - 13} fontSize="18" fontWeight="800" textAnchor="middle" fill="#374151">
                 {p.y}
               </text>
               {labels[i].map((line, k) => (
-                <text key={k} x={x(i)} y={padT + plotH + 22 + k * 16} fontSize="13" textAnchor="middle" fill="#4b5563">
+                <text key={k} x={x(i)} y={padT + plotH + 24 + k * 19} fontSize="15.5" textAnchor="middle" fill="#4b5563">
                   {line}
                 </text>
               ))}
@@ -130,8 +130,8 @@ function HistoryBlock({ hist, product }) {
   const init = hist.length ? hist[hist.length - 1].price_before : product.current_price;
   const points = [{ label: "시작환산주가", y: +Number(init).toFixed(2) }, ...[...hist].reverse().map((h) => ({ label: h.reason || "-", y: +Number(h.price_after).toFixed(2) }))];
   return (
-    <>
-      <PriceChart points={points} />
+    <div className="inv-hist">
+      <div className="inv-hist-table">
       <div className="inv_hist_table_wrap">
         <table className="inv_hist_table">
           <thead>
@@ -159,7 +159,9 @@ function HistoryBlock({ hist, product }) {
           </tbody>
         </table>
       </div>
-    </>
+      </div>
+      <PriceChart points={points} />
+    </div>
   );
 }
 

@@ -320,15 +320,12 @@ export function BankAdmin() {
   const selected = accs.filter((a) => picks[a.student_id]);
   const savePersonal = async (dir, treasury) => {
     setPErr("");
+    if (!selected.length) return setPErr("대상 학생을 먼저 체크해 주세요.");
     const { memo } = pForm;
     const { dep, wd } = splitAmount(dir, pForm.amount);
     if (!(pForm.amount > 0)) return setPErr("금액을 입력해 주세요.");
     if (!memo.trim()) return setPErr("내역(메모)을 입력해 주세요.");
     const isDep = dep > 0;
-    if (!selected.length) {
-      app.toast(isDep ? "입금 완료! (0명)" : "출금 완료! (적용 0명)", isDep ? "🎉" : "⚠️");
-      return;
-    }
     if (treasury === undefined) {
       if (needAsk(pForm, (t) => savePersonal(dir, t))) return;
       treasury = pForm.treasury;

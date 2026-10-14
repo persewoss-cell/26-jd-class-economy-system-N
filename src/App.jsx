@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, getToken, setToken, remember, onBusy } from "./lib/api.js";
 import { AppCtx, Cols, TextInput, Checkbox, Btn, ErrorBox, Toasts, Loading, useLoad, Info, prefetch, clearLoadCache } from "./components/ui.jsx";
-import Sidebar from "./components/Sidebar.jsx";
+import { StudentPinModal, AdminAccountModal } from "./components/AccountModals.jsx";
 import UserHeader from "./components/UserHeader.jsx";
 import { BankAdmin, BankStudent } from "./tabs/Bank.jsx";
 import Individual from "./tabs/Individual.jsx";
@@ -207,7 +207,7 @@ function TabContent({ tab, user }) {
 export default function App() {
   const [user, setUser] = useState(null);
   const [booting, setBooting] = useState(true);
-  const [sbOpen, setSbOpen] = useState(false);
+  const [pop, setPop] = useState(""); // "pin" | "acc"
   const [toasts, setToasts] = useState([]);
   const [ver, setVer] = useState(0);
   const [active, setActive] = useState(null);
@@ -293,40 +293,46 @@ export default function App() {
     <AppCtx.Provider value={ctx}>
       <div className="app">
         {busy ? <div className="top-loading" /> : null}
-        <Sidebar open={sbOpen} onClose={() => setSbOpen(false)} />
         <main className="main">
-          <header className="topbar">
-            <button className="sb-toggle" type="button" onClick={() => setSbOpen(true)} aria-label="사이드바 열기">
-              ☰
-            </button>
-            <div className="brand">
-              <span className="brand-logo">🏫</span>
-              <div>
-                <div className="brand-title">학급 경제 시스템</div>
-                <div className="brand-sub">우리 반 경제 놀이터 🪙</div>
+          {user && user.role === "admin" ? (
+            <header className="topbar admin-bar">
+              <span />
+              <div className="brand center">
+                <span className="brand-logo">🏫</span>
+                <div>
+                  <div className="brand-title">학급 경제 시스템</div>
+                  <div className="brand-sub">우리 반 경제 놀이터 🪙</div>
+                </div>
               </div>
-            </div>
-            {user ? (
               <div className="who">
-                <span className="who-chip">{user.role === "admin" ? "👑 관리자" : `🙂 ${user.name}`}</span>
+                <span className="who-chip">👑 관리자</span>
+                <Btn full={false} className="ghost" onClick={() => setPop("acc")}>
+                  🔐 계정관리
+                </Btn>
                 <Btn full={false} className="ghost" onClick={logout}>
                   로그아웃
                 </Btn>
               </div>
-            ) : null}
-          </header>
+            </header>
+          ) : null}
           {booting ? (
             <Loading />
           ) : !user ? (
             <div className="login-card">
-              <div className="login-emoji">🐷🪙</div>
+              <div className="brand center login-brand">
+                <span className="brand-logo">🏫</span>
+                <div>
+                  <div className="brand-title">학급 경제 시스템</div>
+                  <div className="brand-sub">우리 반 경제 놀이터 🪙</div>
+                </div>
+              </div>
               <div className="login-title">로그인</div>
               <div className="login-sub">이름과 비밀번호를 입력해 주세요</div>
               <LoginForm onLogin={onLogin} />
             </div>
           ) : (
             <div className="stack">
-              {user.role === "student" ? <UserHeader /> : null}
+              {user.role === "student" ? <UserHeader onLogout={logout} onPin={() => setPop("pin")} /> : null}
               <nav className="main-menu" role="radiogroup" aria-label="메인 메뉴">
                 {tabs.keys.map((k) => {
                   const { icon, text, extra } = menuLabel(tabs.labels[k] || k);
@@ -354,6 +360,8 @@ export default function App() {
             </div>
           )}
         </main>
+        <StudentPinModal open={pop === "pin"} onClose={() => setPop("")} />
+        <AdminAccountModal open={pop === "acc"} onClose={() => setPop("")} />
         <Toasts items={toasts} />
       </div>
     </AppCtx.Provider>
