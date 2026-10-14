@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { api } from "../lib/api.js";
 import { readExcel, downloadExcel } from "../lib/excel.js";
-import { useApp, useLoad, Cols, H3, Btn, Select, MultiSelect, Warning, ErrorBox, Success, DataTable, Loading, ConfirmModal, ExcelBar } from "../components/ui.jsx";
+import { useApp, useLoad, Cols, H3, Btn, Select, MultiSelect, Warning, ErrorBox, Success, DataTable, Loading, ExcelBar, Popup, Checkbox, Info } from "../components/ui.jsx";
 
 const ADMIN_OPTS = [
   ["💰입금/출금(관리자)", ["admin", "🏦 내 통장"]],
@@ -12,12 +12,91 @@ const ADMIN_OPTS = [
 ];
 const ADMIN_DISP = { "🏦 내 통장": "💰입금/출금(관리자)", "🏦 은행(적금)": "🏦 은행(적금)(관리자)", "📈 투자": "📈 투자(관리자)", "🛒마트": "🛒마트(관리자)" };
 
+// 권한 회수 팝업: 학생별 부여된 권한을 한 줄씩, 체크한 것만 회수
+function RevokePopup({ data, open, onClose, onDone }) {
+  const rows = [];
+  for (const x of data.students) {
+    for (const k of x.extra) {
+      let kind = "";
+      let tab = "";
+      if (k.startsWith("tab::")) [kind, tab] = ["tab", k.slice(5)];
+      else if (k.startsWith("admin::")) [kind, tab] = ["admin", k.slice(7)];
+      else continue;
+      rows.push({ key: `${x.sid}|${k}`, sid: x.sid, kind, tab, no: x.no, name: x.name, label: kind === "admin" ? ADMIN_DISP[tab] || `${tab}(관리자)` : tab });
+    }
+  }
+  rows.sort((a, b) => a.no - b.no || (a.name < b.name ? -1 : 1) || (a.label < b.label ? -1 : 1));
+  const [chk, setChk] = useState({});
+  const [err, setErr] = useState("");
+  const all = rows.length > 0 && rows.every((r) => chk[r.key]);
+  const run = async () => {
+    setErr("");
+    const picked = rows.filter((r) => chk[r.key]);
+    if (!picked.length) return setErr("회수할 권한을 체크해 주세요.");
+    const groups = {};
+    picked.forEach((r) => {
+      const g = `${r.kind}|${r.tab}`;
+      groups[g] = groups[g] || { kind: r.kind, tab: r.tab, sids: [] };
+      groups[g].sids.push(r.sid);
+    });
+    for (const g of Object.values(groups)) {
+      const r = await api("perm_apply", { kind: g.kind, tab: g.tab, op: "revoke", sids: g.sids });
+      if (!r.ok) return setErr(r.error || "회수 실패");
+    }
+    setChk({});
+    onDone(picked.length);
+  };
+  return (
+    <Popup open={open} title="➖ 권한 회수" onClose={onClose}>
+      {!rows.length ? (
+        <Info>부여된 권한이 없습니다.</Info>
+      ) : (
+        <>
+          <div className="tbl-wrap">
+            <div className="tbl-scroll" style={{ maxHeight: 380 }}>
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th style={{ width: "3.2rem" }}>
+                      <Checkbox label="" checked={all} onChange={(v) => setChk(v ? Object.fromEntries(rows.map((r) => [r.key, true])) : {})} />
+                    </th>
+                    <th>번호</th>
+                    <th>이름</th>
+                    <th>부여된 권한</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r) => (
+                    <tr key={r.key} onClick={() => setChk((c) => ({ ...c, [r.key]: !c[r.key] }))} style={{ cursor: "pointer" }}>
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <Checkbox label="" checked={!!chk[r.key]} onChange={(v) => setChk((c) => ({ ...c, [r.key]: v }))} />
+                      </td>
+                      <td>{r.no}</td>
+                      <td>{r.name}</td>
+                      <td>{r.label}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <Cols w={[3, 1]} va="center">
+            <div className="caption">{`맨 위 체크칸을 누르면 전체 선택 · ${Object.values(chk).filter(Boolean).length}개 선택됨`}</div>
+            <Btn onClick={run}>➖ 체크한 권한 회수</Btn>
+          </Cols>
+        </>
+      )}
+      <ErrorBox>{err}</ErrorBox>
+    </Popup>
+  );
+}
+
 export default function Permissions() {
   const app = useApp();
   const { data, error, reload } = useLoad("perm_load", {}, [app.ver]);
   const [opt, setOpt] = useState("💰입금/출금(관리자)");
   const [sel, setSel] = useState([]);
-  const [confirmAll, setConfirmAll] = useState(false);
+  const [revokeOpen, setRevokeOpen] = useState(false);
   const [msg, setMsg] = useState(null);
   const [file, setFile] = useState(null);
   const [overwrite, setOverwrite] = useState(false);
@@ -33,7 +112,6 @@ export default function Permissions() {
   const resetForm = () => {
     setOpt(options[0][0]);
     setSel([]);
-    setConfirmAll(false);
   };
 
   const apply = async (op) => {
@@ -48,14 +126,6 @@ export default function Permissions() {
     } else setMsg(["error", r.error]);
   };
 
-  const revokeAll = async () => {
-    const r = await api("perm_revoke_all", {});
-    if (r.ok) {
-      setMsg(["success", `전체 학생 권한 전체 회수 완료: ${r.n}명`]);
-      resetForm();
-      reload();
-    } else setMsg(["error", r.error]);
-  };
 
   const status = data.students
     .map((x) => {
@@ -116,15 +186,23 @@ export default function Permissions() {
   return (
     <>
       <H3>🔐 학생별 관리자 탭 권한 부여/회수</H3>
-      <Cols w={[2, 2.6, 1, 1, 1.3]} va="bottom">
+      <Cols w={[2, 2.6, 1, 1]} va="bottom">
         <Select label="부여할 항목 선택" value={opt} options={options.map((o) => o[0])} onChange={setOpt} />
         <MultiSelect label="대상 학생 선택(복수 선택 가능)" value={sel} options={Object.keys(byLabel)} onChange={setSel} />
         <Btn onClick={() => apply("grant")}>➕ 권한 부여</Btn>
-        <Btn onClick={() => apply("revoke")}>➖ 권한 회수</Btn>
-        <Btn onClick={() => setConfirmAll(true)}>🔥 전체 권한 회수</Btn>
+        <Btn onClick={() => setRevokeOpen(true)}>➖ 권한 회수</Btn>
       </Cols>
       <Msg m={msg} />
-      <ConfirmModal open={confirmAll} title="⚠️ 전체 권한 회수" message="모든 학생에게 준 권한을 회수할까요?" onYes={() => { setConfirmAll(false); revokeAll(); }} onNo={() => setConfirmAll(false)} />
+      <RevokePopup
+        data={data}
+        open={revokeOpen}
+        onClose={() => setRevokeOpen(false)}
+        onDone={(n) => {
+          setRevokeOpen(false);
+          app.toast(`권한 회수 완료! (${n}개)`, "✅");
+          reload();
+        }}
+      />
 
       <H3>📌 권한 부여 현황</H3>
       <DataTable rows={status} columns={["번호", "이름", "부여된 권한"]} csvName="권한현황" />
