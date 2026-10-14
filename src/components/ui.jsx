@@ -1,0 +1,495 @@
+// 화면 기본 부품 (Streamlit 위젯과 같은 모양/배치로 만든 React 컴포넌트)
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { api } from "../lib/api.js";
+
+export const AppCtx = createContext(null);
+export const useApp = () => useContext(AppCtx);
+
+// 서버 데이터 불러오기
+export function useLoad(action, args = {}, deps = []) {
+  const [state, setState] = useState({ data: null, loading: true, error: "" });
+  const argsRef = useRef(args);
+  argsRef.current = args;
+  const seq = useRef(0);
+  const reload = useCallback(async () => {
+    const my = ++seq.current;
+    setState((s) => ({ ...s, loading: true }));
+    const r = await api(action, argsRef.current);
+    if (my !== seq.current) return r;
+    if (r.ok) setState({ data: r, loading: false, error: "" });
+    else setState({ data: null, loading: false, error: r.error || "불러오기 실패" });
+    return r;
+  }, [action]);
+  useEffect(() => {
+    reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+  return { ...state, reload };
+}
+
+// ---------------- 배치 ----------------
+export function Cols({ w, children, va, gap, className = "", style }) {
+  const weights = Array.isArray(w) ? w : Array(Number(w) || 1).fill(1);
+  const tpl = weights.map((x) => `minmax(0, ${x}fr)`).join(" ");
+  const kids = React.Children.toArray(children);
+  return (
+    <div className={`cols ${va ? `va-${va}` : ""} ${gap ? `gap-${gap}` : ""} ${className}`} style={{ gridTemplateColumns: tpl, ...style }}>
+      {weights.map((_, i) => (
+        <div className="col" key={i}>
+          {kids[i] ?? null}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export const Stack = ({ children, style }) => <div className="stack" style={style}>{children}</div>;
+export const H2 = ({ children }) => <div className="h2">{children}</div>;
+export const H3 = ({ children }) => <div className="h3">{children}</div>;
+export const H4 = ({ children }) => <div className="h4">{children}</div>;
+export const Subheader = ({ children }) => <div className="subheader">{children}</div>;
+export const Caption = ({ children, style }) => <div className="caption" style={style}>{children}</div>;
+export const Md = ({ children, style }) => <div className="md" style={style}>{children}</div>;
+export const Divider = () => <hr className="divider" />;
+export function SectionDivider() {
+  return (
+    <>
+      <div className="section-divider-space" />
+      <hr className="section-divider" />
+    </>
+  );
+}
+export const Info = ({ children }) => <div className="alert info">{children}</div>;
+export const Success = ({ children }) => <div className="alert success">{children}</div>;
+export const Warning = ({ children }) => <div className="alert warning">{children}</div>;
+export const ErrorBox = ({ children }) => (children ? <div className="alert error">{children}</div> : null);
+export const Loading = ({ text = "불러오는 중..." }) => (
+  <div className="loading">
+    <span className="spin" />
+    {text}
+  </div>
+);
+
+// ---------------- 버튼 ----------------
+export function Btn({ children, onClick, full = true, disabled, className = "", style, title }) {
+  const [busy, setBusy] = useState(false);
+  const handle = async (e) => {
+    if (busy || disabled || !onClick) return;
+    try {
+      const r = onClick(e);
+      if (r && typeof r.then === "function") {
+        setBusy(true);
+        await r;
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button type="button" title={title} className={`btn ${full ? "full" : ""} ${busy ? "busy" : ""} ${className}`} style={style} disabled={disabled} onClick={handle}>
+      {children}
+    </button>
+  );
+}
+
+function Label({ label, help, hidden }) {
+  if (hidden) return null;
+  return (
+    <label className="lbl">
+      {label}
+      {help ? (
+        <span className="help" title={help}>
+          ?
+        </span>
+      ) : null}
+    </label>
+  );
+}
+
+// ---------------- 입력 ----------------
+export function TextInput({ label, value, onChange, type = "text", placeholder, help, hideLabel, disabled, className = "", onEnter, autoComplete }) {
+  return (
+    <div className="field">
+      <Label label={label} help={help} hidden={hideLabel} />
+      <input
+        className={`input ${className}`}
+        type={type}
+        value={value ?? ""}
+        placeholder={placeholder}
+        disabled={disabled}
+        aria-label={label}
+        autoComplete={autoComplete || (type === "password" ? "new-password" : "off")}
+        onChange={(e) => onChange && onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && onEnter) onEnter();
+        }}
+      />
+    </div>
+  );
+}
+
+// st.number_input (− / + 버튼 포함)
+export function NumberInput({ label, value, onChange, min = null, max = null, step = 1, decimals = 0, help, hideLabel, disabled }) {
+  const fmt = (v) => (v === "" || v === null || v === undefined ? "" : decimals ? Number(v).toFixed(decimals) : String(v));
+  const [text, setText] = useState(fmt(value));
+  const focused = useRef(false);
+  useEffect(() => {
+    if (!focused.current) setText(fmt(value));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, decimals]);
+  const clamp = (n) => {
+    if (min !== null && n < min) n = min;
+    if (max !== null && n > max) n = max;
+    return decimals ? Number(n.toFixed(decimals)) : Math.trunc(n);
+  };
+  const commit = (t) => {
+    const n = Number(String(t).replace(/,/g, ""));
+    if (t === "" || !Number.isFinite(n)) {
+      setText(fmt(value));
+      return;
+    }
+    const c = clamp(n);
+    setText(fmt(c));
+    if (c !== value) onChange && onChange(c);
+  };
+  const bump = (d) => {
+    const base = Number.isFinite(Number(value)) ? Number(value) : 0;
+    const c = clamp(base + d * step);
+    setText(fmt(c));
+    onChange && onChange(c);
+  };
+  return (
+    <div className="field">
+      <Label label={label} help={help} hidden={hideLabel} />
+      <div className={`num ${disabled ? "disabled" : ""}`}>
+        <input
+          inputMode={decimals ? "decimal" : "numeric"}
+          value={text}
+          disabled={disabled}
+          aria-label={label}
+          onFocus={() => (focused.current = true)}
+          onBlur={(e) => {
+            focused.current = false;
+            commit(e.target.value);
+          }}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.target.blur();
+          }}
+        />
+        <button type="button" disabled={disabled} onClick={() => bump(-1)} aria-label="감소">
+          −
+        </button>
+        <button type="button" disabled={disabled} onClick={() => bump(1)} aria-label="증가">
+          +
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// options: ["a","b"] 또는 [{value,label}]
+export function Select({ label, value, onChange, options, help, hideLabel, disabled }) {
+  const opts = (options || []).map((o) => (typeof o === "object" ? o : { value: o, label: String(o) }));
+  const idx = Math.max(0, opts.findIndex((o) => String(o.value) === String(value)));
+  return (
+    <div className="field">
+      <Label label={label} help={help} hidden={hideLabel} />
+      <select
+        className="select"
+        value={opts.length ? String(idx) : ""}
+        disabled={disabled}
+        aria-label={label}
+        onChange={(e) => {
+          const o = opts[Number(e.target.value)];
+          if (o && onChange) onChange(o.value);
+        }}
+      >
+        {opts.map((o, i) => (
+          <option key={i} value={String(i)}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+export function MultiSelect({ label, value, onChange, options, placeholder = "선택하세요" }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    const h = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", h);
+    return () => document.removeEventListener("pointerdown", h);
+  }, []);
+  const sel = value || [];
+  const rest = (options || []).filter((o) => !sel.includes(o));
+  return (
+    <div className="field">
+      <Label label={label} />
+      <div className={`ms ${open ? "open" : ""}`} ref={ref}>
+        <div className="ms-box" onClick={() => setOpen((v) => !v)}>
+          {sel.length === 0 ? <span className="ms-ph">{placeholder}</span> : null}
+          {sel.map((s) => (
+            <span className="chip" key={s}>
+              {s}
+              <b
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onChange(sel.filter((x) => x !== s));
+                }}
+              >
+                ✕
+              </b>
+            </span>
+          ))}
+        </div>
+        {open ? (
+          <div className="ms-list">
+            {rest.length === 0 ? <div className="ms-none">선택할 항목이 없습니다.</div> : null}
+            {rest.map((o) => (
+              <div
+                key={o}
+                onClick={() => {
+                  onChange([...sel, o]);
+                }}
+              >
+                {o}
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+export function Checkbox({ label, checked, onChange, disabled, help }) {
+  return (
+    <label className={`check ${disabled ? "disabled" : ""}`}>
+      <input type="checkbox" checked={!!checked} disabled={disabled} onChange={(e) => onChange && onChange(e.target.checked)} />
+      <span className="box" />
+      {label !== undefined && label !== "" ? <span>{label}</span> : null}
+      {help ? (
+        <span className="help" title={help}>
+          ?
+        </span>
+      ) : null}
+    </label>
+  );
+}
+
+// 가로 라디오(버튼 모양). 선택 색: 1번째 초록, 2번째 빨강, 3번째 파랑, 나머지 회색
+export function Radio({ label, options, value, onChange, hideLabel, disabled, colorMode = "pos" }) {
+  return (
+    <div className="field">
+      <Label label={label} hidden={hideLabel} />
+      <div className={`radio ${disabled ? "disabled" : ""}`} role="radiogroup" aria-label={label}>
+        {options.map((o, i) => {
+          const on = String(o) === String(value);
+          const c = colorMode === "pos" ? (i < 3 ? `c${i}` : "cx") : "c1";
+          return (
+            <div key={o} className={`opt ${on ? `on ${c}` : ""}`} onClick={() => !disabled && onChange && onChange(o)}>
+              <span className="dot" />
+              {o}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export function DateInput({ label, value, onChange }) {
+  return (
+    <div className="field">
+      <Label label={label} />
+      <input className="input" type="date" value={value || ""} onChange={(e) => onChange(e.target.value)} />
+    </div>
+  );
+}
+
+export function Expander({ title, children, defaultOpen = false }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className={`expander ${open ? "open" : ""}`}>
+      <div className="exp-head" onClick={() => setOpen((v) => !v)}>
+        <span className="arrow">▶</span>
+        <span>{title}</span>
+      </div>
+      {open ? (
+        <div className="exp-body">
+          <div className="stack">{children}</div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function SubTabs({ tabs, active, onChange }) {
+  return (
+    <div className="subtabs">
+      {tabs.map((t) => (
+        <button key={t} type="button" className={`st ${t === active ? "on" : ""}`} onClick={() => onChange(t)}>
+          {t}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function Metric({ label, value }) {
+  return (
+    <div className="metric">
+      <div className="m-label">{label}</div>
+      <div className="m-value">{value}</div>
+    </div>
+  );
+}
+
+export function Progress({ ratio }) {
+  const r = Math.max(0, Math.min(1, Number(ratio) || 0));
+  return (
+    <div className="progress">
+      <div style={{ width: `${r * 100}%` }} />
+    </div>
+  );
+}
+
+// ---------------- 표 (st.dataframe) ----------------
+function cellText(v) {
+  if (v === null || v === undefined) return "";
+  return String(v);
+}
+
+function toCsv(columns, rows) {
+  const esc = (s) => {
+    const t = cellText(s);
+    return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+  };
+  return [columns.map(esc).join(","), ...rows.map((r) => columns.map((c) => esc(r[c])).join(","))].join("\n");
+}
+
+export function DataTable({ rows, columns, small, tall, height, emptyText = null, csvName = "table" }) {
+  const cols = columns || (rows && rows[0] ? Object.keys(rows[0]).filter((k) => !k.startsWith("_")) : []);
+  const [sort, setSort] = useState({ col: null, dir: 1 });
+  const sorted = useMemo(() => {
+    const arr = [...(rows || [])];
+    if (sort.col !== null) {
+      arr.sort((a, b) => {
+        const x = a[sort.col];
+        const y = b[sort.col];
+        const nx = typeof x === "number";
+        const ny = typeof y === "number";
+        if (nx && ny) return (x - y) * sort.dir;
+        return cellText(x).localeCompare(cellText(y), "ko") * sort.dir;
+      });
+    }
+    return arr;
+  }, [rows, sort]);
+  if ((!rows || rows.length === 0) && emptyText !== null) return <div className="tbl-empty">{emptyText}</div>;
+  const download = () => {
+    const blob = new Blob(["﻿" + toCsv(cols, sorted)], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${csvName}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+  return (
+    <div className="tbl-wrap" style={{ marginTop: "2.1rem" }}>
+      <div className="tbl-tools">
+        <button type="button" onClick={download} title="CSV로 내려받기">
+          ⬇ CSV
+        </button>
+      </div>
+      <div className={`tbl-scroll ${tall ? "tall" : ""}`} style={height ? { maxHeight: height } : undefined}>
+        <table className={`tbl ${small ? "small" : ""}`}>
+          <thead>
+            <tr>
+              {cols.map((c) => (
+                <th key={c} onClick={() => setSort((s) => ({ col: c, dir: s.col === c ? -s.dir : 1 }))}>
+                  {c}
+                  {sort.col === c ? (sort.dir > 0 ? " ▲" : " ▼") : ""}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.length === 0 ? (
+              <tr>
+                <td colSpan={cols.length || 1} className="tbl-empty">
+                  데이터가 없습니다.
+                </td>
+              </tr>
+            ) : (
+              sorted.map((r, i) => (
+                <tr key={i}>
+                  {cols.map((c, j) => (
+                    <td key={c} className={`${typeof r[c] === "number" ? "num-cell" : ""} ${j < 2 ? `c${j}` : ""}`}>
+                      {cellText(r[c])}
+                    </td>
+                  ))}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ---------------- 파일 업로드 / 다운로드 ----------------
+export function FileUpload({ label, file, onFile, help, accept = ".xlsx" }) {
+  const ref = useRef(null);
+  return (
+    <div className="field">
+      <Label label={label} help={help} />
+      <div className="uploader">
+        <button type="button" className="btn" onClick={() => ref.current && ref.current.click()}>
+          파일 선택
+        </button>
+        <span className="fname">{file ? `${file.name} (${Math.round(file.size / 1024)}KB)` : "선택된 파일 없음 · xlsx"}</span>
+        {file ? (
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              if (ref.current) ref.current.value = "";
+              onFile(null);
+            }}
+          >
+            ✕
+          </button>
+        ) : null}
+        <input
+          ref={ref}
+          type="file"
+          accept={accept}
+          style={{ display: "none" }}
+          onChange={(e) => {
+            const f = e.target.files && e.target.files[0];
+            onFile(f || null);
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+export function Toasts({ items }) {
+  return (
+    <div className="toasts">
+      {items.map((t) => (
+        <div className="toast" key={t.id}>
+          <span>{t.icon}</span>
+          <span>{t.msg}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
