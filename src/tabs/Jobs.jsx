@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
 import { readExcel, downloadExcel } from "../lib/excel.js";
-import { useApp, useLoad, Cols, H3, H4, Subheader, Caption, Btn, TextInput, Select, MultiSelect, NumberInput, Checkbox, Metric, Info, Warning, ErrorBox, Success, Expander, DataTable, Loading, ConfirmModal, ExcelBar, TplEditor, Popup, useSort, SortTh } from "../components/ui.jsx";
+import { useApp, useLoad, Cols, H3, H4, Subheader, Caption, Btn, TextInput, Select, MultiSelect, NumberInput, Checkbox, Metric, Info, Warning, ErrorBox, Success, Expander, DataTable, Loading, ConfirmModal, ExcelBar, TplEditor, Popup, useSort, SortTh, moveItem } from "../components/ui.jsx";
 
 function calcNet(gross, cfg) {
   gross = parseInt(gross, 10) || 0;
@@ -365,7 +365,22 @@ function JobAssign({ data, reload }) {
     <>
       <H3>🎖️ 직업 지정 / 회수</H3>
       <Cols w={[2, 2.6, 0.8, 0.8]} va="bottom">
-        {jobOptions.length ? <Select label="부여할 직업 선택" value={job} options={jobOptions} onChange={setJob} /> : <span />}
+        {jobOptions.length ? (
+          <Select
+            label="부여할 직업 선택"
+            value={job}
+            options={jobOptions}
+            onChange={setJob}
+            onMove={async (i, d) => {
+              // ▲▼: 직업 순서를 바꿔 바로 저장 (고른 직업은 id로 기억하므로 그대로 유지)
+              const r = await api("tpl_reorder", { kind: "jobs", ids: moveItem(jobIds, i, d) });
+              if (r.ok) await reload();
+              else setMsg(["error", r.error || "순서 변경 실패"]);
+            }}
+          />
+        ) : (
+          <span />
+        )}
         <MultiSelect label="대상 학생 선택(복수 선택 가능)" value={sel} options={accOptions} onChange={setSel} />
         <Btn onClick={() => act("hire")}>➕ 고용</Btn>
         <Btn onClick={() => setFireOpen(true)}>➖ 해제</Btn>
