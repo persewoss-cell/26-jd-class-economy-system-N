@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
 import { readExcel, downloadExcel } from "../lib/excel.js";
-import { useApp, useLoad, Cols, H3, H4, Btn, Warning, ErrorBox, Loading, ExcelBar, ConfirmModal } from "../components/ui.jsx";
+import { useApp, useLoad, Cols, H3, H4, Btn, Warning, ErrorBox, Loading, ExcelBar, ConfirmModal, useSort, SortTh } from "../components/ui.jsx";
 
 export default function Accounts() {
   const app = useApp();
@@ -13,6 +13,7 @@ export default function Accounts() {
   const [delTargets, setDelTargets] = useState(null);
   const [warn, setWarn] = useState("");
   const [saveMsg, setSaveMsg] = useState(null);
+  const srt = useSort(rows, (r, c) => (c === "no" && Number(r.no) === 999999 ? "" : r[c]));
 
   useEffect(() => {
     if (data) setRows(data.rows.map((r) => ({ ...r, sel: false, _orig: { no: r.no, name: r.name, pin: r.pin } })));
@@ -106,13 +107,13 @@ export default function Accounts() {
             <thead>
               <tr>
                 <th>선택</th>
-                <th>번호</th>
-                <th>이름</th>
-                <th>비밀번호</th>
+                <SortTh label="번호" col="no" s={srt} />
+                <SortTh label="이름" col="name" s={srt} />
+                <SortTh label="비밀번호" col="pin" s={srt} />
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {srt.sorted.map((r) => (
                 <tr key={r.sid}>
                   <td style={{ textAlign: "center" }}>
                     <input type="checkbox" checked={r.sel} onChange={(e) => setCell(r.sid, "sel", e.target.checked)} style={{ width: 18, height: 18 }} />

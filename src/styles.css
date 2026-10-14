@@ -295,7 +295,7 @@ h1, h2, h3, h4 { margin: 0; line-height: 1.3; }
 .tbl-scroll { overflow: auto; max-height: 420px; -webkit-overflow-scrolling: touch; border-radius: var(--radius); }
 table.tbl { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 0.9rem; }
 table.tbl th, table.tbl td { padding: 0.55rem 0.75rem; border-bottom: 1px solid #f0f3f7; white-space: nowrap; }
-table.tbl th { position: sticky; top: 0; background: #f7f9fc; color: #5a6578; font-weight: 700; font-size: 0.84rem; text-align: center; cursor: pointer; z-index: 1; user-select: none; }
+table.tbl th { position: sticky; top: 0; background: #f7f9fc; color: #5a6578; font-weight: 700; font-size: 0.84rem; text-align: center; z-index: 1; user-select: none; }
 table.tbl td { text-align: center; }
 table.tbl td.num-cell { font-variant-numeric: tabular-nums; }
 table.tbl tbody tr:nth-child(even) td { background: #fbfcfe; }
@@ -472,3 +472,25 @@ table.ledger { border-collapse: separate; border-spacing: 0; font-size: 0.92rem;
 .sum-value .sum-label { margin: 0 0.25rem 0 0; font-size: 0.95rem; font-weight: 700; }
 /* 탭이 많으면(권한 많은 학생) 두 줄로 고르게 */
 .main-menu.many .mm { flex: 0 0 calc((100% - 9 * 4px) / 10); min-width: 0; }
+
+/* 표 정렬 세모: 검정(기본) / 파랑 ▼(내림차순) / 빨강 ▲(오름차순) */
+.th-in { display: inline-flex; align-items: center; justify-content: center; gap: 0.25rem; }
+.sort-btn { border: none; background: transparent; padding: 0.1rem 0.25rem; margin: -0.1rem 0; border-radius: 6px; cursor: pointer; font-size: 0.72rem; line-height: 1; color: #2d3748; min-width: 1.5rem; min-height: 1.5rem; }
+.sort-btn:hover { background: rgba(45, 55, 72, 0.08); }
+.sort-btn.desc { color: #2f7cf6; }
+.sort-btn.asc { color: #e5484d; }
+.sort-head { display: inline-flex; align-items: center; gap: 0.2rem; }
+
+/* 순서 바꾸기 드롭다운: 각 줄 오른쪽 작은 ▲▼ */
+.msel { position: relative; }
+.msel-btn { width: 100%; text-align: left; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.msel-list { position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 6px); background: #fff; border: 1px solid var(--line); border-radius: var(--radius); max-height: 320px; overflow: auto; box-shadow: var(--shadow-lg); padding: 4px; }
+.msel-list.busy { opacity: 0.7; }
+.msel-item { display: flex; align-items: center; gap: 0.4rem; border-radius: 8px; }
+.msel-item:hover { background: var(--mint-l); }
+.msel-item.on { background: var(--mint-l); font-weight: 700; }
+.msel-label { flex: 1; min-width: 0; padding: 0.55rem 0.75rem; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.msel-moves { display: inline-flex; gap: 0.2rem; padding-right: 0.3rem; flex: 0 0 auto; }
+.msel-moves button { width: 1.9rem; height: 1.7rem; border: 1px solid var(--line); background: #fff; border-radius: 7px; font-size: 0.68rem; color: var(--muted); cursor: pointer; }
+.msel-moves button:hover:not(:disabled) { color: var(--mint-d); border-color: var(--mint); }
+.msel-moves button:disabled { opacity: 0.3; cursor: default; }

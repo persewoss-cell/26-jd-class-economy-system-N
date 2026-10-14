@@ -21,6 +21,8 @@ function TreTemplates({ templates, reload }) {
       ]}
       onSave={(f, edit) => api("tre_tpl_save", { template_id: edit ? edit.template_id : "", label: f.label.trim(), kind: f.kind === "세출" ? "expense" : "income", amount: f.amount, order: f.order })}
       onDelete={(t) => api("tre_tpl_delete", { template_id: t.template_id })}
+      idOf={(t) => t.template_id}
+      onReorder={(ids) => api("tpl_reorder", { kind: "treasury", ids })}
       saveToast="국고 템플릿 저장 완료!"
       deleteToast="국고 템플릿 삭제 완료!"
       reload={reload}

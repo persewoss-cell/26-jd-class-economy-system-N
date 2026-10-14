@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
 import { readExcel, downloadExcel } from "../lib/excel.js";
-import { useApp, useLoad, Cols, H3, H4, Subheader, Caption, Btn, TextInput, Select, MultiSelect, NumberInput, Checkbox, Metric, Info, Warning, ErrorBox, Success, Expander, DataTable, Loading, ConfirmModal, ExcelBar, TplEditor, Popup } from "../components/ui.jsx";
+import { useApp, useLoad, Cols, H3, H4, Subheader, Caption, Btn, TextInput, Select, MultiSelect, NumberInput, Checkbox, Metric, Info, Warning, ErrorBox, Success, Expander, DataTable, Loading, ConfirmModal, ExcelBar, TplEditor, Popup, useSort, SortTh } from "../components/ui.jsx";
 
 function calcNet(gross, cfg) {
   gross = parseInt(gross, 10) || 0;
@@ -256,6 +256,7 @@ function assignmentRows(data) {
 // 해제 팝업: 배정 목록에서 체크한 것만 해제
 function FirePopup({ data, open, onClose, onDone }) {
   const rows = assignmentRows(data);
+  const srt = useSort(rows);
   const [chk, setChk] = useState({});
   const [err, setErr] = useState("");
   const all = rows.length > 0 && rows.every((r) => chk[r.key]);
@@ -286,15 +287,13 @@ function FirePopup({ data, open, onClose, onDone }) {
                     <th style={{ width: "3.2rem" }}>
                       <Checkbox label="" checked={all} onChange={(v) => setChk(v ? Object.fromEntries(rows.map((r) => [r.key, true])) : {})} />
                     </th>
-                    <th>번호</th>
-                    <th>이름</th>
-                    <th>직업</th>
-                    <th>월급</th>
-                    <th>실수령액</th>
+                    {["번호", "이름", "직업", "월급", "실수령액"].map((c) => (
+                      <SortTh key={c} label={c} s={srt} />
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((r) => (
+                  {srt.sorted.map((r) => (
                     <tr key={r.key} onClick={() => setChk((c) => ({ ...c, [r.key]: !c[r.key] }))} style={{ cursor: "pointer" }}>
                       <td onClick={(e) => e.stopPropagation()}>
                         <Checkbox label="" checked={!!chk[r.key]} onChange={(v) => setChk((c) => ({ ...c, [r.key]: v }))} />
@@ -408,6 +407,8 @@ function JobEdit({ data, reload }) {
           return api("job_save", { job_id: edit ? edit._id : "", job: f.job.trim(), salary: f.salary, student_count: f.count });
         }}
         onDelete={(r) => api("job_delete", { job_id: r._id })}
+        idOf={(r) => r._id}
+        onReorder={(ids) => api("tpl_reorder", { kind: "jobs", ids })}
         saveToast="저장 완료!"
         deleteToast="삭제 완료"
         reload={reload}

@@ -41,7 +41,7 @@ function StudentDetail({ sid, onChanged }) {
     const r = await api("tx_delete", { admin_pin: pin, sid, tx_ids: ids });
     if (r.ok) {
       let msg = `삭제 완료: ${r.deleted}건`;
-      if (r.treasury_reversed) msg += ` / 국고환급 ${r.treasury_reversed}건`;
+      if (r.treasury_reversed) msg += ` / 국고 기록 정정 ${r.treasury_reversed}건`;
       app.toast(msg, "🗑️");
       setInfo(r.message || "");
       setFails(r.errors || []);
@@ -79,7 +79,7 @@ function StudentDetail({ sid, onChanged }) {
               setErr("");
             }}
           >
-            <Caption>체크한 내역을 완전히 삭제해요. 적금·투자·되돌리기 관련 내역은 삭제할 수 없고, 월급 입금을 지우면 국고에 반영됐던 공제 세입도 함께 환급돼요.</Caption>
+            <Caption>체크한 내역을 완전히 삭제해요. 적금·투자·되돌리기 관련 내역은 삭제할 수 없고, 국고에 반영됐던 내역(월급 공제 세입, 여러 명 입금/출금의 이 학생 몫)도 함께 원래대로 돌아가요.</Caption>
             <Checkbox
               label="전체 선택"
               checked={allOn}

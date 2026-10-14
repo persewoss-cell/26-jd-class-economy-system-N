@@ -4,7 +4,7 @@ import { fail, requireAny, isAdminPin } from "../auth.js";
 import {
   activeStudents, loadRoleLookup, roleNameFor, loadInvestProductMap, investSummaries, getCreditCfg,
   listStatSubmissions, manualDeltaMap, calcCreditFrom, isSavingsMemo, isInvestMemo,
-  removeTx, removeSalaryPayment,
+  removeTx, removeSalaryPayment, removeBatchShare,
 } from "../core.js";
 import { str, toInt } from "../../shared/format.js";
 
@@ -118,6 +118,8 @@ export default {
         } else {
           if (!(await removeTx(db, tx))) throw new Error("이미 삭제됨");
           deleted += 1;
+          // 여러 명에게 한 번에 한 입금/출금이면 국고에서도 이 학생 몫만 되돌림
+          if (await removeBatchShare(db, tx, studentName)) treReversed += 1;
         }
       } catch (e) {
         errors.push(`[삭제실패] ${memo}: ${e.message || e}`);

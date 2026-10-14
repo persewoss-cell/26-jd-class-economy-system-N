@@ -2,7 +2,7 @@
 import React, { useMemo, useState } from "react";
 import { api } from "../lib/api.js";
 import { readExcel, downloadExcel } from "../lib/excel.js";
-import { useApp, useLoad, Cols, H3, Subheader, Btn, TextInput, Select, NumberInput, Checkbox, Radio, SubTabs, ConfirmModal, Info, ErrorBox, Success, DataTable, SectionDivider, Loading, ExcelBar, Popup } from "../components/ui.jsx";
+import { useApp, useLoad, Cols, H3, Subheader, Btn, TextInput, Select, NumberInput, Checkbox, Radio, SubTabs, ConfirmModal, Info, ErrorBox, Success, DataTable, SectionDivider, Loading, ExcelBar, Popup, moveItem } from "../components/ui.jsx";
 import { TradeForm, useTradeForm, splitAmount, templateDisplay, TX_COLUMNS, txRowsView } from "../components/trade.jsx";
 
 // ---------------- 되돌리기(관리자): 최근 입금/출금을 골라 기록째 지움 ----------------
@@ -193,6 +193,18 @@ function TemplateManager({ templates, reload }) {
   };
 
   const opts = templates.map((t, i) => ({ value: i, label: templateDisplay(t) }));
+  // 드롭다운 ▲▼: 순서를 바꿔 바로 저장, 고른 항목은 같이 따라감
+  const onMove = async (i, d) => {
+    const r = await api("tpl_reorder", { kind: "bank", ids: moveItem(templates, i, d).map((t) => t.template_id) });
+    if (!r.ok) return setErr(r.error || "순서 변경 실패");
+    setErr("");
+    const follow = (cur) => (cur === i ? i + d : cur === i + d ? i : cur);
+    await reload();
+    const np = follow(pickIdx);
+    setPickIdx(np);
+    setDelIdx(follow(delIdx));
+    if (mode === "수정") setForm((f) => ({ ...f, order: np + 1 }));
+  };
   return (
     <>
       <SectionDivider />
@@ -201,7 +213,7 @@ function TemplateManager({ templates, reload }) {
       {mode === "삭제" ? (
         templates.length ? (
           <Cols w={[3, 1]} va="bottom">
-            <Select label="삭제할 템플릿 선택" value={delIdx} options={opts} onChange={setDelIdx} />
+            <Select label="삭제할 템플릿 선택" value={delIdx} options={opts} onChange={setDelIdx} onMove={onMove} />
             <Btn onClick={() => setDelConfirm(true)}>🗑️ 삭제</Btn>
           </Cols>
         ) : (
@@ -214,6 +226,7 @@ function TemplateManager({ templates, reload }) {
               label="수정할 템플릿 선택"
               value={pickIdx}
               options={opts}
+              onMove={onMove}
               onChange={(i) => {
                 setPickIdx(i);
                 fill(templates[i]);

@@ -253,9 +253,11 @@ export function NumberInput({ label, value, onChange, min = null, max = null, st
 }
 
 // options: ["a","b"] 또는 [{value,label}]
-export function Select({ label, value, onChange, options, help, hideLabel, disabled }) {
+// onMove(index, -1|1)를 주면 목록 각 줄 오른쪽에 작은 ▲▼ (순서 바꾸기)가 생김
+export function Select({ label, value, onChange, options, help, hideLabel, disabled, onMove }) {
   const opts = (options || []).map((o) => (typeof o === "object" ? o : { value: o, label: String(o) }));
   const idx = Math.max(0, opts.findIndex((o) => String(o.value) === String(value)));
+  if (onMove) return <MoveSelect label={label} help={help} hideLabel={hideLabel} disabled={disabled} opts={opts} idx={idx} onChange={onChange} onMove={onMove} />;
   return (
     <div className="field">
       <Label label={label} help={help} hidden={hideLabel} />
@@ -277,6 +279,74 @@ export function Select({ label, value, onChange, options, help, hideLabel, disab
       </select>
     </div>
   );
+}
+
+function MoveSelect({ label, help, hideLabel, disabled, opts, idx, onChange, onMove }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const h = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", h);
+    return () => document.removeEventListener("pointerdown", h);
+  }, [open]);
+  const move = async (i, d) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await onMove(i, d);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const cur = opts[idx];
+  return (
+    <div className="field">
+      <Label label={label} help={help} hidden={hideLabel} />
+      <div className="msel" ref={ref}>
+        <button type="button" className="select msel-btn" disabled={disabled} aria-label={label} onClick={() => setOpen((o) => !o)}>
+          {cur ? cur.label : ""}
+        </button>
+        {open ? (
+          <div className={`msel-list ${busy ? "busy" : ""}`}>
+            {opts.map((o, i) => (
+              <div key={i} className={`msel-item ${i === idx ? "on" : ""}`}>
+                <span
+                  className="msel-label"
+                  onClick={() => {
+                    if (onChange) onChange(o.value);
+                    setOpen(false);
+                  }}
+                >
+                  {o.label}
+                </span>
+                <span className="msel-moves">
+                  <button type="button" title="위로" aria-label="위로" disabled={busy || i === 0} onClick={() => move(i, -1)}>
+                    ▲
+                  </button>
+                  <button type="button" title="아래로" aria-label="아래로" disabled={busy || i === opts.length - 1} onClick={() => move(i, 1)}>
+                    ▼
+                  </button>
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+// 목록에서 i번째를 d(-1 위, +1 아래)만큼 옮긴 새 배열
+export function moveItem(arr, i, d) {
+  const j = i + d;
+  if (j < 0 || j >= arr.length) return arr;
+  const a = [...arr];
+  [a[i], a[j]] = [a[j], a[i]];
+  return a;
 }
 
 export function MultiSelect({ label, value, onChange, options, placeholder = "선택하세요" }) {
@@ -475,23 +545,101 @@ function toCsv(columns, rows) {
   return [columns.map(esc).join(","), ...rows.map((r) => columns.map((c) => esc(r[c])).join(","))].join("\n");
 }
 
-export function DataTable({ rows, columns, small, height, emptyText = null, csvName = "table" }) {
-  const cols = columns || (rows && rows[0] ? Object.keys(rows[0]).filter((k) => !k.startsWith("_")) : []);
-  const [sort, setSort] = useState({ col: null, dir: 1 });
+// ---------------- 표 정렬 (엑셀처럼) ----------------
+// 머리글 오른쪽 세모: 검은 ▼(기본 순서) → 파란 ▼(내림차순) → 빨간 ▲(오름차순) → 다시 기본
+const NUMLIKE = /^[+-]?[\d,]+(\.\d+)?$/;
+// "2026년 10월 14일(수) 오후 3시 5분" / "10월 14일 오전 9시" / "2026-10-14 15:05" 같은 날짜는 시간 순서로
+const KR_DT = /^(?:(\d{4})년\s*)?(\d{1,2})월\s*(\d{1,2})일[^오]*(?:(오전|오후)\s*(\d{1,2})시(?:\s*(\d{1,2})분)?(?:\s*(\d{1,2})초)?)?/;
+const ISO_DT = /^(\d{4})[-./](\d{1,2})[-./](\d{1,2})(?:[ T](\d{1,2}):(\d{2}))?/;
+function dateKey(t) {
+  let m = KR_DT.exec(t);
+  if (m) {
+    let h = m[5] ? Number(m[5]) % 12 : 0;
+    if (m[4] === "오후") h += 12;
+    return Date.UTC(Number(m[1] || 2000), Number(m[2]) - 1, Number(m[3]), h, Number(m[6] || 0), Number(m[7] || 0));
+  }
+  m = ISO_DT.exec(t);
+  if (m) return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4] || 0), Number(m[5] || 0));
+  return null;
+}
+function sortKey(v) {
+  if (typeof v === "number") return v;
+  if (typeof v === "boolean") return v ? 1 : 0;
+  const t = cellText(v).trim();
+  if (t !== "" && NUMLIKE.test(t)) return Number(t.replace(/,/g, ""));
+  const d = t ? dateKey(t) : null;
+  return d !== null ? d : t;
+}
+function compareVals(a, b) {
+  const x = sortKey(a);
+  const y = sortKey(b);
+  const ex = x === "" || x === null || x === undefined;
+  const ey = y === "" || y === null || y === undefined;
+  if (ex || ey) return ex === ey ? 0 : ex ? 1 : -1; // 빈 칸은 항상 아래
+  if (typeof x === "number" && typeof y === "number") return x - y;
+  return String(x).localeCompare(String(y), "ko", { numeric: true });
+}
+
+// rows를 정렬해서 돌려줌. getVal(row, col): 정렬에 쓸 값 (기본 row[col])
+export function useSort(rows, getVal) {
+  const [st, setSt] = useState({ col: null, dir: 0 });
+  const getRef = useRef(getVal);
+  getRef.current = getVal;
   const sorted = useMemo(() => {
     const arr = [...(rows || [])];
-    if (sort.col !== null) {
-      arr.sort((a, b) => {
-        const x = a[sort.col];
-        const y = b[sort.col];
-        const nx = typeof x === "number";
-        const ny = typeof y === "number";
-        if (nx && ny) return (x - y) * sort.dir;
-        return cellText(x).localeCompare(cellText(y), "ko") * sort.dir;
-      });
-    }
-    return arr;
-  }, [rows, sort]);
+    if (st.col === null) return arr;
+    const g = getRef.current || ((r, c) => (r ? r[c] : undefined));
+    return arr
+      .map((r, i) => [r, i])
+      .sort((a, b) => {
+        const c = compareVals(g(a[0], st.col), g(b[0], st.col));
+        const ea = sortKey(g(a[0], st.col)) === "";
+        const eb = sortKey(g(b[0], st.col)) === "";
+        if (ea || eb) return c || a[1] - b[1];
+        return c * st.dir || a[1] - b[1];
+      })
+      .map((x) => x[0]);
+  }, [rows, st]);
+  const toggle = (col) => setSt((p) => (p.col !== col ? { col, dir: -1 } : p.dir === -1 ? { col, dir: 1 } : { col: null, dir: 0 }));
+  const btn = (col) => <SortBtn active={st.col === col ? st.dir : 0} onClick={() => toggle(col)} />;
+  return { sorted, btn, sort: st };
+}
+
+export function SortBtn({ active, onClick }) {
+  const cls = active === -1 ? "desc" : active === 1 ? "asc" : "";
+  const tip = active === -1 ? "내림차순 (누르면 오름차순)" : active === 1 ? "오름차순 (누르면 원래 순서)" : "누르면 내림차순";
+  return (
+    <button
+      type="button"
+      className={`sort-btn ${cls}`}
+      title={tip}
+      aria-label={tip}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+    >
+      {active === 1 ? "▲" : "▼"}
+    </button>
+  );
+}
+
+// 머리글 칸: 글자 + 정렬 세모
+export function SortTh({ label, col, s, className, style }) {
+  return (
+    <th className={className} style={style}>
+      <span className="th-in">
+        <span>{label}</span>
+        {s.btn(col ?? label)}
+      </span>
+    </th>
+  );
+}
+
+export function DataTable({ rows, columns, small, height, emptyText = null, csvName = "table" }) {
+  const cols = columns || (rows && rows[0] ? Object.keys(rows[0]).filter((k) => !k.startsWith("_")) : []);
+  const srt = useSort(rows);
+  const sorted = srt.sorted;
   if ((!rows || rows.length === 0) && emptyText !== null) return <div className="tbl-empty">{emptyText}</div>;
   const download = () => {
     const blob = new Blob(["﻿" + toCsv(cols, sorted)], { type: "text/csv;charset=utf-8" });
@@ -513,10 +661,7 @@ export function DataTable({ rows, columns, small, height, emptyText = null, csvN
           <thead>
             <tr>
               {cols.map((c) => (
-                <th key={c} onClick={() => setSort((s) => ({ col: c, dir: s.col === c ? -s.dir : 1 }))}>
-                  {c}
-                  {sort.col === c ? (sort.dir > 0 ? " ▲" : " ▼") : ""}
-                </th>
+                <SortTh key={c} label={c} col={c} s={srt} />
               ))}
             </tr>
           </thead>
@@ -653,7 +798,8 @@ export function ExcelBar({ downloads = [], file, onFile, overwrite, setOverwrite
 //  - 추가/수정: (수정이면 대상 선택) + 입력칸들과 [저장]이 한 줄
 //  - 삭제: 대상 선택 + [삭제] → 확인 팝업
 // fields(f, set) → 입력칸 배열, widths → 입력칸 폭 비율(저장 버튼 칸은 자동으로 붙음)
-export function TplEditor({ items, itemLabel, blank, fromItem, fields, widths, onSave, onDelete, saveToast = "템플릿 저장 완료!", deleteToast = "삭제 완료!", reload, noun = "템플릿" }) {
+// onReorder(ids): 드롭다운의 ▲▼로 순서를 바꾸면 바뀐 id 순서로 저장
+export function TplEditor({ items, itemLabel, blank, fromItem, fields, widths, onSave, onDelete, saveToast = "템플릿 저장 완료!", deleteToast = "삭제 완료!", reload, noun = "템플릿", idOf, onReorder }) {
   const app = useApp();
   const [mode, setMode] = useState("추가");
   const [idx, setIdx] = useState(0);
@@ -678,6 +824,20 @@ export function TplEditor({ items, itemLabel, blank, fromItem, fields, widths, o
       reload();
     } else setErr(r.error || "저장 실패");
   };
+  // 순서 바꾸기: 고른 항목은 같이 따라가고, 수정 칸의 '순서' 숫자도 새 순서로
+  const onMove = onReorder
+    ? async (i, d) => {
+        const r = await onReorder(moveItem(items, i, d).map(idOf));
+        if (!r.ok) return setErr(r.error || "순서 변경 실패");
+        setErr("");
+        let ni = idx;
+        if (idx === i) ni = i + d;
+        else if (idx === i + d) ni = i;
+        await reload();
+        setIdx(ni);
+        if (mode === "수정") setF((x) => ("order" in x ? { ...x, order: ni + 1 } : x));
+      }
+    : undefined;
   const del = async () => {
     setConfirm(false);
     if (!cur) return;
@@ -694,7 +854,7 @@ export function TplEditor({ items, itemLabel, blank, fromItem, fields, widths, o
       {mode !== "추가" && !items.length ? <Info>{mode === "수정" ? "수정할" : "삭제할"} {noun}이 없어요.</Info> : null}
       {mode === "삭제" && items.length ? (
         <Cols w={[3, 1]} va="bottom">
-          <Select label={`삭제할 ${noun} 선택`} value={idx} options={opts} onChange={setIdx} />
+          <Select label={`삭제할 ${noun} 선택`} value={idx} options={opts} onChange={setIdx} onMove={onMove} />
           <Btn onClick={() => setConfirm(true)}>🗑️ 삭제</Btn>
         </Cols>
       ) : null}
@@ -703,6 +863,7 @@ export function TplEditor({ items, itemLabel, blank, fromItem, fields, widths, o
           label={`수정할 ${noun} 선택`}
           value={idx}
           options={opts}
+          onMove={onMove}
           onChange={(i) => {
             setIdx(i);
             setF(fromItem(items[i]));

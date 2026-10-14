@@ -1,11 +1,49 @@
 // 🍀 복권
 import React, { useState } from "react";
 import { api } from "../lib/api.js";
-import { useApp, useLoad, Cols, H3, Caption, Btn, TextInput, Select, NumberInput, Checkbox, Info, Warning, ErrorBox, Success, DataTable, Loading, ConfirmModal } from "../components/ui.jsx";
+import { useApp, useLoad, Cols, H3, Caption, Btn, TextInput, Select, NumberInput, Checkbox, Info, Warning, ErrorBox, Success, DataTable, Loading, ConfirmModal, useSort, SortTh } from "../components/ui.jsx";
 
 const ENTRY_COLS = ["참여 일시", "번호", "이름", "복권 참여 번호"];
 const SUM_COLS = ["참여자수", "참여 복권수", "총 액수"];
 const pad = (n, k = 2) => String(n).padStart(k, "0");
+
+const WIN_VAL = { 등수: (w) => w.rank, 번호: (w) => w.student_no, 이름: (w) => w.student_name, "복권 참여 번호": (w) => w.numbers.map((n) => pad(n)).join(","), 당첨금: (w) => w.prize };
+function WinnersTable({ winners, wset }) {
+  const srt = useSort(winners, (w, c) => WIN_VAL[c](w));
+  return (
+    <div className="tbl-wrap">
+      <div className="tbl-scroll">
+        <table className="tbl">
+          <thead>
+            <tr>
+              {Object.keys(WIN_VAL).map((c) => (
+                <SortTh key={c} label={c} s={srt} />
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {srt.sorted.map((w, i) => (
+              <tr key={i}>
+                <td>{w.rank}등</td>
+                <td>{w.student_no}</td>
+                <td>{w.student_name}</td>
+                <td>
+                  {w.numbers.map((n, j) => (
+                    <React.Fragment key={j}>
+                      {j ? ", " : ""}
+                      {wset.has(n) ? <span style={{ color: "#d90429", fontWeight: 700 }}>{pad(n)}</span> : pad(n)}
+                    </React.Fragment>
+                  ))}
+                </td>
+                <td>{w.prize}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
 function LotteryAdmin() {
   const app = useApp();
@@ -174,35 +212,7 @@ function LotteryAdmin() {
             <>
               <Caption>{`회차 ${cur.round_no} | 당첨번호: ${cur.winning_numbers.map((n) => pad(n)).join(", ")}`}</Caption>
               {cur.winners.length ? (
-                <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                  <thead>
-                    <tr>
-                      {["등수", "번호", "이름", "복권 참여 번호", "당첨금"].map((h) => (
-                        <th key={h} style={{ textAlign: "left", borderBottom: "1px solid #ddd" }}>
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cur.winners.map((w, i) => (
-                      <tr key={i}>
-                        <td>{w.rank}등</td>
-                        <td>{w.student_no}</td>
-                        <td>{w.student_name}</td>
-                        <td>
-                          {w.numbers.map((n, j) => (
-                            <React.Fragment key={j}>
-                              {j ? ", " : ""}
-                              {wset.has(n) ? <span style={{ color: "#d90429", fontWeight: 700 }}>{pad(n)}</span> : pad(n)}
-                            </React.Fragment>
-                          ))}
-                        </td>
-                        <td>{w.prize}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <WinnersTable winners={cur.winners} wset={wset} />
               ) : (
                 <Info>당첨자가 없습니다.</Info>
               )}

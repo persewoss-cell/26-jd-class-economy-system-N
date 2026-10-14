@@ -1,7 +1,8 @@
 // 📊 통계청 (제출물 O/X/△ 관리) — 클릭은 화면에서만 바뀌고 [✅ 저장]을 눌러야 DB 반영
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
-import { useApp, useLoad, Cols, H3, Btn, TextInput, Select, NumberInput, Checkbox, Info, ErrorBox, SectionDivider, Loading, TplEditor, ConfirmModal } from "../components/ui.jsx";
+import { readExcel, downloadExcel } from "../lib/excel.js";
+import { useApp, useLoad, Cols, H3, Btn, TextInput, Select, NumberInput, Checkbox, Info, ErrorBox, SectionDivider, Loading, TplEditor, ConfirmModal, useSort, SortTh, ExcelBar, Warning, Success, DataTable } from "../components/ui.jsx";
 
 export function OX({ value, onPick, disabled }) {
   return (
@@ -16,31 +17,46 @@ export function OX({ value, onPick, disabled }) {
 }
 
 // 번호·이름은 고정하고 제출물 열은 옆으로 밀어서 보는 장부 (최신 제출물이 왼쪽)
-// rows: [{ key, no, name, cell: (제출물) => 내용, className }]
+// rows: [{ key, no, name, cell: (제출물) => 내용, val: (제출물) => 정렬값, pin: "top"|"bottom", className }]
+// pin 줄(일괄·평균)은 정렬해도 제자리
 export function LedgerGrid({ subs, rows, colWidth = "7.5rem" }) {
+  const top = rows.filter((r) => r.pin === "top");
+  const bottom = rows.filter((r) => r.pin === "bottom");
+  const body = rows.filter((r) => !r.pin);
+  const subById = Object.fromEntries(subs.map((x) => [x.submission_id, x]));
+  const srt = useSort(body, (r, c) => (c === "no" || c === "name" ? r[c] : r.val ? r.val(subById[c]) : ""));
   return (
     <div className="ledger-wrap">
       <table className="ledger">
         <thead>
           <tr>
-            <th className="lg-no">번호</th>
-            <th className="lg-name">이름</th>
-            {subs.map((s) => (
-              <th key={s.submission_id} className="stat-hdr" style={{ minWidth: colWidth }}>
-                {s.date_display}
-                <br />
-                {s.label}
-              </th>
+            <SortTh label="번호" col="no" s={srt} className="lg-no" />
+            <SortTh label="이름" col="name" s={srt} className="lg-name" />
+            {subs.map((x) => (
+              <SortTh
+                key={x.submission_id}
+                col={x.submission_id}
+                s={srt}
+                className="stat-hdr"
+                style={{ minWidth: colWidth }}
+                label={
+                  <>
+                    {x.date_display}
+                    <br />
+                    {x.label}
+                  </>
+                }
+              />
             ))}
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => (
+          {[...top, ...srt.sorted, ...bottom].map((r) => (
             <tr key={r.key} className={r.className || ""}>
               <td className="lg-no">{r.no}</td>
               <td className="lg-name">{r.name}</td>
-              {subs.map((s) => (
-                <td key={s.submission_id}>{r.cell(s)}</td>
+              {subs.map((x) => (
+                <td key={x.submission_id}>{r.cell(x)}</td>
               ))}
             </tr>
           ))}
@@ -104,10 +120,72 @@ function StatTemplates({ templates, reload }) {
         ]}
         onSave={(f, edit) => api("stat_tpl_save", { template_id: edit ? edit.template_id : "", label: f.label.trim(), order: f.order })}
         onDelete={(t) => api("stat_tpl_delete", { template_id: t.template_id })}
+        idOf={(t) => t.template_id}
+        onReorder={(ids) => api("tpl_reorder", { kind: "stats", ids })}
         saveToast="템플릿 저장 완료!"
         deleteToast="템플릿 삭제 완료!"
         reload={reload}
       />
+    </>
+  );
+}
+
+// 통계표 템플릿 엑셀로 일괄 추가 (탭 맨 아래)
+const TPL_COLS = ["템플릿 내역", "순서"];
+function StatTemplateExcel({ templates, reload }) {
+  const app = useApp();
+  const [file, setFile] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [overwrite, setOverwrite] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const onFile = async (fl) => {
+    setFile(fl);
+    setPreview(null);
+    setMsg(null);
+    if (!fl) return;
+    try {
+      const { columns, rows } = await readExcel(fl);
+      if (!TPL_COLS.every((c) => columns.includes(c))) return setMsg(["error", "엑셀 컬럼은 반드시: 템플릿 내역 | 순서 여야 합니다."]);
+      const rs = rows.filter((r) => String(r["템플릿 내역"] ?? "").trim()).map((r) => ({ "템플릿 내역": String(r["템플릿 내역"]).trim(), 순서: r["순서"] }));
+      if (!rs.length) return setMsg(["error", "엑셀에 템플릿 내역이 없습니다."]);
+      setPreview(rs);
+    } catch (e) {
+      setMsg(["error", `엑셀을 읽지 못했어요: ${e.message || e}`]);
+    }
+  };
+  const save = async () => {
+    setMsg(null);
+    if (!preview) return setMsg(["warning", "먼저 올바른 엑셀을 업로드하세요."]);
+    const r = await api("stat_tpl_bulk", { rows: preview, overwrite });
+    if (!r.ok) return setMsg(["error", `저장 실패: ${r.error}`]);
+    app.toast(`통계표 템플릿 반영 완료: ${r.added}건 추가${r.skipped ? ` · 이미 있는 ${r.skipped}건 건너뜀` : ""}`, "📥");
+    setFile(null);
+    setPreview(null);
+    reload();
+  };
+  return (
+    <>
+      <H3>📥 통계표 템플릿 엑셀로 일괄 추가</H3>
+      <ExcelBar
+        downloads={[
+          ["📄 샘플 엑셀", () => downloadExcel("통계표_템플릿_샘플.xlsx", [{ name: "stat_templates", columns: TPL_COLS, rows: [{ "템플릿 내역": "수학 익힘책", 순서: 1 }, { "템플릿 내역": "독서록", 순서: 2 }] }])],
+          ["📄 현재 템플릿 엑셀", () => downloadExcel("통계표_템플릿_현재.xlsx", [{ name: "stat_templates", columns: TPL_COLS, rows: templates.map((t) => ({ "템플릿 내역": t.label, 순서: t.order })) }])],
+        ]}
+        file={file}
+        onFile={onFile}
+        overwrite={overwrite}
+        setOverwrite={setOverwrite}
+        overwriteLabel="기존 통계표 템플릿을 모두 지우고 엑셀로 덮어쓰기"
+        onSave={save}
+      >
+        {msg ? msg[0] === "warning" ? <Warning>{msg[1]}</Warning> : <ErrorBox>{msg[1]}</ErrorBox> : null}
+        {preview ? (
+          <>
+            <Success>업로드 완료! ({preview.length}행) 미리보기 확인 후 저장을 누르세요.</Success>
+            <DataTable rows={preview} columns={TPL_COLS} />
+          </>
+        ) : null}
+      </ExcelBar>
     </>
   );
 }
@@ -235,6 +313,7 @@ export default function Stats() {
                 key: "_bulk",
                 no: "⚡",
                 name: "일괄",
+                pin: "top",
                 className: "lg-bulk",
                 cell: (s) => (
                   <OX
@@ -250,6 +329,7 @@ export default function Stats() {
                 key: st.student_id,
                 no: st.no,
                 name: st.name,
+                val: (s) => (edit[s.submission_id] || {})[st.student_id] || "X",
                 cell: (s) => (
                   <OX
                     value={(edit[s.submission_id] || {})[st.student_id] || "X"}
@@ -262,6 +342,7 @@ export default function Stats() {
         </>
       )}
       <StatTemplates templates={templates} reload={reload} />
+      <StatTemplateExcel templates={templates} reload={reload} />
     </>
   );
 }

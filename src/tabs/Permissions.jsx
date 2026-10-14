@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { api } from "../lib/api.js";
 import { readExcel, downloadExcel } from "../lib/excel.js";
-import { useApp, useLoad, Cols, H3, Btn, Select, MultiSelect, Warning, ErrorBox, Success, DataTable, Loading, ExcelBar, Popup, Checkbox, Info } from "../components/ui.jsx";
+import { useApp, useLoad, Cols, H3, Btn, Select, MultiSelect, Warning, ErrorBox, Success, DataTable, Loading, ExcelBar, Popup, Checkbox, Info, useSort, SortTh } from "../components/ui.jsx";
 
 const ADMIN_OPTS = [
   ["💰입금/출금(관리자)", ["admin", "🏦 내 통장"]],
@@ -26,6 +26,7 @@ function RevokePopup({ data, open, onClose, onDone }) {
     }
   }
   rows.sort((a, b) => a.no - b.no || (a.name < b.name ? -1 : 1) || (a.label < b.label ? -1 : 1));
+  const srt = useSort(rows);
   const [chk, setChk] = useState({});
   const [err, setErr] = useState("");
   const all = rows.length > 0 && rows.every((r) => chk[r.key]);
@@ -60,13 +61,13 @@ function RevokePopup({ data, open, onClose, onDone }) {
                     <th style={{ width: "3.2rem" }}>
                       <Checkbox label="" checked={all} onChange={(v) => setChk(v ? Object.fromEntries(rows.map((r) => [r.key, true])) : {})} />
                     </th>
-                    <th>번호</th>
-                    <th>이름</th>
-                    <th>부여된 권한</th>
+                    <SortTh label="번호" col="no" s={srt} />
+                    <SortTh label="이름" col="name" s={srt} />
+                    <SortTh label="부여된 권한" col="label" s={srt} />
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((r) => (
+                  {srt.sorted.map((r) => (
                     <tr key={r.key} onClick={() => setChk((c) => ({ ...c, [r.key]: !c[r.key] }))} style={{ cursor: "pointer" }}>
                       <td onClick={(e) => e.stopPropagation()}>
                         <Checkbox label="" checked={!!chk[r.key]} onChange={(v) => setChk((c) => ({ ...c, [r.key]: v }))} />

@@ -201,6 +201,40 @@ export default {
     return {};
   },
 
+  // 통계표 템플릿 엑셀 일괄 추가: [템플릿 내역, 순서]. 이미 있는 내역은 건너뜀, 끝나면 순서를 1,2,3…으로 정리
+  async stat_tpl_bulk(ctx, { rows, overwrite }) {
+    requireAny(ctx, STATS, "접근 권한이 없습니다.");
+    const db = ctx.db;
+    const input = (rows || [])
+      .map((r, i) => ({ label: str(r["템플릿 내역"]).trim(), order: ior(r["순서"], 999999), i }))
+      .filter((r) => r.label);
+    if (!input.length) fail("엑셀에 템플릿 내역이 없습니다.");
+    if (overwrite) await db.collection("stat_templates").deleteMany({});
+    const cur = (await col(db, "stat_templates").find({})).map((t) => ({ template_id: String(t._id), label: str(t.label).trim(), order: ior(t.order, 999999) }));
+    const have = new Set(cur.map((t) => t.label));
+    let added = 0;
+    let skipped = 0;
+    const merged = [...cur];
+    for (const r of input) {
+      if (have.has(r.label)) {
+        skipped += 1;
+        continue;
+      }
+      have.add(r.label);
+      merged.push({ template_id: newId(), label: r.label, order: r.order, isNew: true, i: r.i });
+      added += 1;
+    }
+    merged.sort((a, b) => a.order - b.order || (a.isNew ? 1 : 0) - (b.isNew ? 1 : 0) || (a.i ?? 0) - (b.i ?? 0));
+    let n = 1;
+    for (const t of merged) {
+      const payload = { label: t.label, order: n };
+      if (t.isNew) payload.created_at = new Date();
+      await col(db, "stat_templates").set(t.template_id, payload, true);
+      n += 1;
+    }
+    return { added, skipped };
+  },
+
   async stat_tpl_delete(ctx, { template_id }) {
     requireAny(ctx, STATS, "접근 권한이 없습니다.");
     if (!template_id) fail("template_id가 필요합니다.");

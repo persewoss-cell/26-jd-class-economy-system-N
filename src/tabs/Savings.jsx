@@ -1,7 +1,7 @@
 // 🏦 은행(적금) — 관리자: 입금 승인 + 적금 관리 장부 + 중도해지 / 학생: 적금 가입·내역·중도해지 / 공통: 이자율표
 import React, { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api.js";
-import { useApp, useLoad, Cols, H3, H4, Caption, Btn, Select, NumberInput, Checkbox, Metric, Info, Warning, ErrorBox, Expander, DataTable, Loading, ConfirmModal } from "../components/ui.jsx";
+import { useApp, useLoad, Cols, H3, H4, Caption, Btn, Select, NumberInput, Checkbox, Metric, Info, Warning, ErrorBox, Expander, DataTable, Loading, ConfirmModal, useSort } from "../components/ui.jsx";
 
 function DepositApproval() {
   const app = useApp();
@@ -11,6 +11,17 @@ function DepositApproval() {
   const [err, setErr] = useState("");
   const [askAll, setAskAll] = useState(""); // "approve" | "reject"
   const rows = (data && data.rows) || [];
+  // 정렬해도 번호가 비어 있는 학생은 원래 순번으로 보이도록 미리 붙여 둠
+  const srt = useSort(
+    rows.map((r, i) => ({ ...r, _i: i, _no: r.no > 0 ? r.no : i + 1 })),
+    (r, c) => (c === "when" ? r._i : c === "no" ? r._no : c === "apply_treasury" ? (r.apply_treasury ? "O" : "X") : r[c])
+  );
+  const hd = (label, col) => (
+    <span className="sort-head">
+      <b>{label}</b>
+      {srt.btn(col)}
+    </span>
+  );
   const W = [0.8, 0.9, 1.4, 2.2, 3.2, 1.2, 1.1, 1.9];
 
   const process = async (ids, action, kind) => {
@@ -65,18 +76,18 @@ function DepositApproval() {
         <>
           <Cols w={W} va="center">
             <b>체크</b>
-            <b>번호</b>
-            <b>이름</b>
-            <b>날짜</b>
-            <b>내역</b>
-            <b>금액</b>
-            <b>국고반영</b>
+            {hd("번호", "no")}
+            {hd("이름", "name")}
+            {hd("날짜", "when")}
+            {hd("내역", "memo")}
+            {hd("금액", "amount")}
+            {hd("국고반영", "apply_treasury")}
             <b>승인여부</b>
           </Cols>
-          {rows.map((r, i) => (
+          {srt.sorted.map((r) => (
             <Cols w={W} va="center" key={r.request_id}>
               <Checkbox checked={!!checked[r.request_id]} onChange={(v) => setChecked((c) => ({ ...c, [r.request_id]: v }))} />
-              <div>{r.no > 0 ? r.no : i + 1}</div>
+              <div>{r._no}</div>
               <div>{r.name}</div>
               <div>{r.when}</div>
               <div>{r.memo}</div>

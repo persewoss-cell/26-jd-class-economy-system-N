@@ -17,14 +17,14 @@ export default function UserStatsCredit() {
       {!subs.length ? (
         <Info>아직 제출물 내역이 없어요.</Info>
       ) : (
-        <LedgerGrid subs={subs} rows={[{ key: "me", no, name: nm, cell: (s) => <OX value={s.status} disabled /> }]} />
+        <LedgerGrid subs={subs} rows={[{ key: "me", no, name: nm, val: (s) => s.status, cell: (s) => <OX value={s.status} disabled /> }]} />
       )}
       <Divider />
       <H3>💳 신용등급 변동표(내 기록)</H3>
       {!subs.length ? (
         <Info>표시할 기록이 없어요.</Info>
       ) : (
-        <LedgerGrid subs={subs} rows={[{ key: "me", no, name: nm, cell: (s) => <span className="credit-ledger-score">{s.score}점/{s.grade}등급</span> }]} />
+        <LedgerGrid subs={subs} rows={[{ key: "me", no, name: nm, val: (s) => s.score, cell: (s) => <span className="credit-ledger-score">{s.score}점/{s.grade}등급</span> }]} />
       )}
     </>
   );

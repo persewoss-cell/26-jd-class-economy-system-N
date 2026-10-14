@@ -69,6 +69,8 @@ function MartTemplates({ templates, reload }) {
         ]}
         onSave={(f, edit) => api("mart_tpl_save", { item: f.item.trim(), price: f.price, order: f.order, template_id: edit ? edit.template_id : "" })}
         onDelete={(t) => api("mart_tpl_delete", { template_id: t.template_id })}
+        idOf={(t) => t.template_id}
+        onReorder={(ids) => api("tpl_reorder", { kind: "mart", ids })}
         saveToast="템플릿 저장 완료"
         deleteToast="삭제 완료"
         reload={reload}

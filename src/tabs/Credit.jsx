@@ -145,12 +145,13 @@ export default function Credit() {
                 key: st.student_id,
                 no: st.no,
                 name: st.name,
+                val: (s) => scoreAt(s.submission_id, st.student_id),
                 cell: (s) => {
                   const sc = scoreAt(s.submission_id, st.student_id);
                   return <span className="credit-ledger-score">{sc}점/{scoreToGrade(sc)}등급</span>;
                 },
               })),
-              { key: "_avg", no: "", name: "평균", className: "lg-avg", cell: (s) => <span className="credit-ledger-score">{avgAt(s.submission_id).toFixed(2)}점</span> },
+              { key: "_avg", no: "", name: "평균", pin: "bottom", className: "lg-avg", cell: (s) => <span className="credit-ledger-score">{avgAt(s.submission_id).toFixed(2)}점</span> },
             ]}
           />
           <H3>📌 신용등급 구분표</H3>

@@ -11,8 +11,9 @@ import mart from "./mart.js";
 import auction from "./auction.js";
 import lottery from "./lottery.js";
 import user from "./user.js";
+import reorder from "./reorder.js";
 
 export const ACTIONS = {
   ...session, ...bank, ...individual, ...invest, ...permissions, ...jobs, ...treasuryStats,
-  ...savings, ...mart, ...auction, ...lottery, ...user,
+  ...savings, ...mart, ...auction, ...lottery, ...user, ...reorder,
 };

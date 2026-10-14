@@ -1,7 +1,7 @@
 // 📈 투자 (관리자 / 학생 / 권한학생 ⍟📈 투자(관리자))
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
-import { useApp, useLoad, Cols, H3, H4, Caption, Btn, TextInput, Select, NumberInput, Info, Warning, ErrorBox, Expander, DataTable, Loading, ConfirmModal } from "../components/ui.jsx";
+import { useApp, useLoad, Cols, H3, H4, Caption, Btn, TextInput, Select, NumberInput, Info, Warning, ErrorBox, Expander, DataTable, Loading, ConfirmModal, useSort, SortTh } from "../components/ui.jsx";
 
 const f2 = (v) => (Number(v) || 0).toFixed(2);
 
@@ -125,7 +125,12 @@ function PriceChart({ points }) {
   );
 }
 
+const HIST_VAL = { 변동일시: (h) => -h._i, 변동사유: (h) => h.reason, 실제주가: (h) => h.real_price_after, 환산주가: (h) => h.price_after, "주가 등락": (h) => h.price_after - h.price_before };
 function HistoryBlock({ hist, product }) {
+  const srt = useSort(
+    (hist || []).map((h, i) => ({ ...h, _i: i })),
+    (h, c) => HIST_VAL[c](h)
+  );
   if (!hist || !hist.length) return <Caption>아직 주가 변동 기록이 없습니다.</Caption>;
   const init = hist.length ? hist[hist.length - 1].price_before : product.current_price;
   const points = [{ label: "시작환산주가", y: +Number(init).toFixed(2) }, ...[...hist].reverse().map((h) => ({ label: h.reason || "-", y: +Number(h.price_after).toFixed(2) }))];
@@ -136,15 +141,13 @@ function HistoryBlock({ hist, product }) {
         <table className="inv_hist_table">
           <thead>
             <tr>
-              <th>변동일시</th>
-              <th>변동사유</th>
-              <th>실제주가</th>
-              <th>환산주가</th>
-              <th>주가 등락</th>
+              {Object.keys(HIST_VAL).map((c) => (
+                <SortTh key={c} label={c} s={srt} />
+              ))}
             </tr>
           </thead>
           <tbody>
-            {hist.map((h, i) => {
+            {srt.sorted.map((h, i) => {
               const diff = +(h.price_after - h.price_before).toFixed(2);
               return (
                 <tr key={i}>

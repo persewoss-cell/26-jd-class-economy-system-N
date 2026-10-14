@@ -90,7 +90,9 @@ export async function adminTx(db, { sid, memo, deposit = 0, withdraw = 0, applyT
   if (!doc) fail("잔액이 부족해 처리할 수 없어요.");
   if (applyTreasury) {
     const treSigned = type === "withdraw" ? withdraw : -deposit;
-    await treasuryApply(db, { memo: str(treasuryMemo) || memo, signed: treSigned, actor: str(actor) || "auto", recorder, extra });
+    // 여러 명 입금/출금(배치)에서는 학생별 국고 기록을 나중에 찾을 수 있게 학생 id도 남김
+    const treExtra = extra.batch_id ? { ...extra, tx_student_id: String(sid) } : extra;
+    await treasuryApply(db, { memo: str(treasuryMemo) || memo, signed: treSigned, actor: str(actor) || "auto", recorder, extra: treExtra });
   }
   const newBal = toInt(doc && doc.balance);
   const txId = await insertTx(db, { sid, type, amount, balanceAfter: newBal, memo, recorder, extra });
@@ -415,6 +417,43 @@ export async function removeTreasuryEntry(db, led) {
   await db.collection("treasury_ledger").updateMany({ created_at: { $gt: led.created_at } }, { $inc: { balance_after: -signed } });
   return true;
 }
+// 국고 기록의 금액만 줄임(기록은 남김): 잔액과 이후 기록의 총액도 같이 정정
+async function shrinkTreasuryEntry(db, led, share) {
+  const next = toInt(led.amount) - share;
+  const r = await db.collection("treasury_ledger").updateOne(
+    { _id: led._id, amount: led.amount },
+    { $inc: { amount: -share, balance_after: -share }, $set: { type: next > 0 ? "income" : "expense", income: next > 0 ? next : 0, expense: next < 0 ? -next : 0 } }
+  );
+  if (!r.modifiedCount) return false;
+  await db.collection("treasury").updateOne({ _id: "state" }, { $inc: { balance: -share }, $set: { updated_at: new Date() } }, { upsert: true });
+  await db.collection("treasury_ledger").updateMany({ created_at: { $gt: led.created_at } }, { $inc: { balance_after: -share } });
+  return true;
+}
+
+// 💰입금/출금 탭의 여러 명(개인 여러 명·전체 일괄) 기록 중 한 학생 것만 지울 때 → 국고에서도 그 학생 몫만 되돌림
+// - 개인(여러 명): 학생마다 국고 기록이 따로 있으므로 그 학생 기록을 지움
+// - 전체 일괄: 국고 기록이 하나이므로 그 학생 몫만큼 금액을 줄이고, 마지막 학생이면 기록을 지움
+export async function removeBatchShare(db, tx, name = "") {
+  const bid = str(tx.batch_id);
+  if (!bid || str(tx.source) !== "bank_admin") return false;
+  const share = -toInt(tx.amount); // 그 학생 거래가 국고에 준 금액(입금이면 세출)
+  if (!share) return false;
+  const leds = await db.collection("treasury_ledger").find({ batch_id: bid }).toArray();
+  if (!leds.length) return false;
+  if (str(tx.batch_kind) === "bulk") {
+    const led = leds[0];
+    const cur = toInt(led.amount);
+    if (cur - share === 0 || Math.sign(cur - share) !== Math.sign(cur)) return await removeTreasuryEntry(db, led);
+    return await shrinkTreasuryEntry(db, led, share);
+  }
+  let led = leds.find((l) => str(l.tx_student_id) === str(tx.student_id));
+  if (!led) {
+    const cands = leds.filter((l) => !l.tx_student_id && toInt(l.amount) === share);
+    led = (name && cands.find((l) => str(l.memo).includes(name))) || (cands.length === 1 ? cands[0] : null);
+  }
+  return led ? await removeTreasuryEntry(db, led) : false;
+}
+
 // 월급 입금 기록에 딸린 "월급 공제 세입" 국고 기록 (같은 달·직업·이름, 가장 가까운 시각)
 export async function findSalaryTreasury(db, tx, name) {
   const linked = await db.collection("treasury_ledger").findOne({ salary_tx_id: String(tx._id) });
