@@ -9,6 +9,7 @@ function DepositApproval() {
   const [checked, setChecked] = useState({});
   const [warn, setWarn] = useState("");
   const [err, setErr] = useState("");
+  const [askAll, setAskAll] = useState(""); // "approve" | "reject"
   const rows = (data && data.rows) || [];
   const W = [0.8, 0.9, 1.4, 2.2, 3.2, 1.2, 1.1, 1.9];
 
@@ -42,9 +43,21 @@ function DepositApproval() {
         <H3>✅ 입금 승인(승인 대기 목록)</H3>
         {rows.length ? <Btn onClick={() => process(picked, "approve", "checked")}>체크승인</Btn> : <span />}
         {rows.length ? <Btn onClick={() => process(picked, "reject", "checked")}>체크거절</Btn> : <span />}
-        {rows.length ? <Btn onClick={() => process(ids, "approve", "all")}>전체승인</Btn> : <span />}
-        {rows.length ? <Btn onClick={() => process(ids, "reject", "all")}>전체거절</Btn> : <span />}
+        {rows.length ? <Btn onClick={() => setAskAll("approve")}>전체승인</Btn> : <span />}
+        {rows.length ? <Btn onClick={() => setAskAll("reject")}>전체거절</Btn> : <span />}
       </Cols>
+      <ConfirmModal
+        open={!!askAll}
+        title={askAll === "approve" ? "✅ 전체 승인" : "🧾 전체 거절"}
+        message={`승인 대기 ${rows.length}건을 모두 ${askAll === "approve" ? "승인" : "거절"}할까요?`}
+        yesText={askAll === "approve" ? "전체 승인" : "전체 거절"}
+        onYes={async () => {
+          const a = askAll;
+          setAskAll("");
+          await process(ids, a, "all");
+        }}
+        onNo={() => setAskAll("")}
+      />
       {data && !rows.length ? <Info>승인 대기 중인 입금 신청이 없습니다.</Info> : null}
       {warn ? <Warning>{warn}</Warning> : null}
       <ErrorBox>{err}</ErrorBox>

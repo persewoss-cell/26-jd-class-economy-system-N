@@ -58,7 +58,8 @@ export function useLoad(action, args = {}, deps = []) {
           });
     if (my !== seq.current) return r;
     if (r.ok) setState({ data: r, loading: false, error: "" });
-    else setState({ data: null, loading: false, error: r.error || "불러오기 실패" });
+    // 다시 불러오기가 실패하면(잠깐 끊김 등) 보이던 화면은 그대로 둠
+    else setState((s) => (s.data ? { ...s, loading: false } : { data: null, loading: false, error: r.error || "불러오기 실패" }));
     return r;
   }, [action]);
   useEffect(() => {
@@ -84,13 +85,11 @@ export function Cols({ w, children, va, gap, className = "", style }) {
   );
 }
 
-export const Stack = ({ children, style }) => <div className="stack" style={style}>{children}</div>;
 export const H2 = ({ children }) => <div className="h2">{children}</div>;
 export const H3 = ({ children }) => <div className="h3">{children}</div>;
 export const H4 = ({ children }) => <div className="h4">{children}</div>;
 export const Subheader = ({ children }) => <div className="subheader">{children}</div>;
 export const Caption = ({ children, style }) => <div className="caption" style={style}>{children}</div>;
-export const Md = ({ children, style }) => <div className="md" style={style}>{children}</div>;
 export const Divider = () => <hr className="divider" />;
 export function SectionDivider() {
   return (
@@ -116,7 +115,7 @@ export const Loading = ({ text = "불러오는 중..." }) => (
 const textOf = (c) => (typeof c === "string" || typeof c === "number" ? String(c) : Array.isArray(c) ? c.map(textOf).join("") : c && c.props ? textOf(c.props.children) : "");
 function toneOf(children) {
   const t = textOf(children);
-  if (/전체 해제|선택 해제|닫기|다시 검사|지급 안 함|취소/.test(t)) return "";
+  if (/전체 해제|선택 해제|닫기|다시 검사|지급 안 함|취소|숫자 초기화|접기/.test(t)) return "";
   if (/삭제|회수|거절|초기화|해제|마감|중도해지|중도 해지|되돌리기|아니오/.test(t)) return "tone-danger";
   if (/저장|추가|승인|지급|개시|구입|제출|고용|부여|조회|반영|참여|추첨|생성|변경|로그인|예$|^예|투자하기|가입|적용|실행|등록/.test(t)) return "tone-main";
   return "";
@@ -158,13 +157,14 @@ function Label({ label, help, hidden }) {
 }
 
 // ---------------- 입력 ----------------
-export function TextInput({ label, value, onChange, type = "text", placeholder, help, hideLabel, disabled, className = "", onEnter, autoComplete }) {
+export function TextInput({ label, value, onChange, type = "text", placeholder, help, hideLabel, disabled, className = "", onEnter, autoComplete, inputMode }) {
   return (
     <div className="field">
       <Label label={label} help={help} hidden={hideLabel} />
       <input
         className={`input ${className}`}
         type={type}
+        inputMode={inputMode}
         value={value ?? ""}
         placeholder={placeholder}
         disabled={disabled}
@@ -223,7 +223,16 @@ export function NumberInput({ label, value, onChange, min = null, max = null, st
             focused.current = false;
             commit(e.target.value);
           }}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => {
+            const t = e.target.value;
+            setText(t);
+            // 입력하는 즉시 반영(바로 버튼을 눌러도 새 값으로 처리) — 범위 밖 값은 칸을 벗어날 때 맞춰 줌
+            const n = Number(String(t).replace(/,/g, ""));
+            if (t.trim() !== "" && Number.isFinite(n) && (min === null || n >= min) && (max === null || n <= max)) {
+              const c = clamp(n);
+              if (c !== value) onChange && onChange(c);
+            }
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter") e.target.blur();
           }}
@@ -384,19 +393,36 @@ export function Expander({ title, children, defaultOpen = false }) {
 
 // 가운데 확인 팝업(예/아니오)
 // children: 팝업 안에 넣을 추가 내용(관리자 비밀번호 칸, 체크 목록, 오류 문구 등)
-export function ConfirmModal({ open, title, message, yesText = "예", noText = "아니오", onYes, onNo, children, wide }) {
+// onCancel을 주면 오른쪽 위 ✕(아무것도 하지 않고 닫기)가 생김
+export function ConfirmModal({ open, title, message, yesText = "예", noText = "아니오", onYes, onNo, onCancel, children, wide }) {
+  // 처리 중에는 '예'를 다시 눌러도 두 번 실행되지 않게
+  const [busy, setBusy] = useState(false);
   if (!open) return null;
+  const yes = async () => {
+    if (busy || !onYes) return;
+    setBusy(true);
+    try {
+      await onYes();
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={title || message}>
       <div className={`modal ${wide ? "confirm-wide" : ""}`}>
+        {onCancel ? (
+          <button type="button" className="modal-x" disabled={busy} onClick={onCancel} aria-label="취소">
+            ✕
+          </button>
+        ) : null}
         {title ? <div className="modal-title">{title}</div> : null}
         <div className="modal-msg">{message}</div>
         {children ? <div className="modal-body stack">{children}</div> : null}
         <div className="modal-btns">
-          <button type="button" className="btn primary" onClick={onYes}>
-            {yesText}
+          <button type="button" className={`btn primary ${toneOf(yesText) === "tone-danger" ? "tone-danger" : ""}`} disabled={busy} onClick={yes}>
+            {busy ? "처리 중…" : yesText}
           </button>
-          <button type="button" className="btn" onClick={onNo}>
+          <button type="button" className="btn" disabled={busy} onClick={onNo}>
             {noText}
           </button>
         </div>
@@ -449,7 +475,7 @@ function toCsv(columns, rows) {
   return [columns.map(esc).join(","), ...rows.map((r) => columns.map((c) => esc(r[c])).join(","))].join("\n");
 }
 
-export function DataTable({ rows, columns, small, tall, height, emptyText = null, csvName = "table" }) {
+export function DataTable({ rows, columns, small, height, emptyText = null, csvName = "table" }) {
   const cols = columns || (rows && rows[0] ? Object.keys(rows[0]).filter((k) => !k.startsWith("_")) : []);
   const [sort, setSort] = useState({ col: null, dir: 1 });
   const sorted = useMemo(() => {
@@ -482,7 +508,7 @@ export function DataTable({ rows, columns, small, tall, height, emptyText = null
           ⬇ CSV
         </button>
       </div>
-      <div className={`tbl-scroll ${tall ? "tall" : ""}`} style={height ? { maxHeight: height } : undefined}>
+      <div className="tbl-scroll" style={height ? { maxHeight: height } : undefined}>
         <table className={`tbl ${small ? "small" : ""}`}>
           <thead>
             <tr>
@@ -520,9 +546,13 @@ export function DataTable({ rows, columns, small, tall, height, emptyText = null
 }
 
 // ---------------- 파일 업로드 / 다운로드 ----------------
-export function FileUpload({ label, file, onFile, help, accept = ".xlsx", hideLabel }) {
+function FileUpload({ label, file, onFile, help, accept = ".xlsx", hideLabel }) {
   const ref = useRef(null);
   const [over, setOver] = useState(false);
+  // 저장 뒤 파일이 비워지면 선택칸도 비움(같은 파일을 다시 골라도 인식되게)
+  useEffect(() => {
+    if (!file && ref.current) ref.current.value = "";
+  }, [file]);
   // 파일을 끌어다 놓아도 올라감 (드래그 앤 드롭)
   const onDrop = (e) => {
     e.preventDefault();

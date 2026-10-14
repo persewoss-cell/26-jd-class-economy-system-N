@@ -1,5 +1,5 @@
 // 🧾 로그기록 (통합)
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api.js";
 import { useApp, H3, Btn, NumberInput, TextInput, Info, ErrorBox, DataTable, Loading } from "../components/ui.jsx";
 
@@ -15,10 +15,13 @@ export default function Logs() {
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
 
+  const seq = useRef(0);
   const load = async (n) => {
+    const my = ++seq.current;
     setLoading(true);
     setErr("");
     const r = await api("logs_load", { max_rows: n });
+    if (my !== seq.current) return; // 더 나중 요청의 결과만 화면에 반영
     setLoading(false);
     if (r.ok) setRows(r.rows);
     else setErr(r.error);

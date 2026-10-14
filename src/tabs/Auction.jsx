@@ -55,6 +55,7 @@ function AuctionAdmin() {
   const [bidName, setBidName] = useState("");
   const [aff, setAff] = useState("");
   const [err, setErr] = useState("");
+  const [askClose, setAskClose] = useState(false);
   if (error) return <ErrorBox>{error}</ErrorBox>;
   if (!data) return <Loading />;
   const open = async () => {
@@ -82,8 +83,19 @@ function AuctionAdmin() {
         <TextInput label="입찰 내역" value={bidName} onChange={setBidName} />
         <TextInput label="소속" value={aff} onChange={setAff} />
         <Btn onClick={open}>개시</Btn>
-        <Btn onClick={close}>마감</Btn>
+        <Btn onClick={() => setAskClose(true)}>마감</Btn>
       </Cols>
+      <ConfirmModal
+        open={askClose}
+        title="🏷️ 경매 마감"
+        message={data.open ? `진행 중인 ${pad2(data.open.round_no)}회 경매(${data.open.bid_name})를 마감할까요?` : "진행 중인 경매를 마감할까요?"}
+        yesText="마감"
+        onYes={async () => {
+          setAskClose(false);
+          await close();
+        }}
+        onNo={() => setAskClose(false)}
+      />
       <ErrorBox>{err}</ErrorBox>
       {data.open ? <Success>{`진행 중: 입찰번호 ${pad2(data.open.round_no)} | 입찰이름 ${data.open.bid_name} | 소속 ${data.open.affiliation}`}</Success> : <Info>개시된 경매가 없습니다.</Info>}
 

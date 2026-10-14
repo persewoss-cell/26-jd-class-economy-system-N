@@ -10,18 +10,6 @@ import { str, toInt, ior, toDate, fmtMd, fmtKrDatetimeNoYear } from "../../share
 const BANK_ADMIN = ["admin::🏦 내 통장"];
 const SAV_ADMIN = ["admin::🏦 은행(적금)"];
 
-function parseTemplateLabel(label) {
-  const s = str(label).trim();
-  if (s.startsWith("[") && s.includes("]")) {
-    const end = s.indexOf("]");
-    const cat = s.slice(1, end).trim();
-    let rest = s.slice(end + 1).trim();
-    if (rest.startsWith("-")) rest = rest.slice(1).trim();
-    return [cat, rest];
-  }
-  return ["", s];
-}
-
 function composeLabel(base, cat) {
   base = str(base).trim();
   cat = str(cat).trim();
@@ -63,14 +51,6 @@ async function upsertTemplate(db, { template_id, base_label, category, kind, amo
   else await col(db, "templates").add(payload);
 }
 
-function canRollbackRow(r, blockInvest) {
-  if (r.type === "rollback") return false;
-  if (isSavingsMemo(r.memo) || r.type === "maturity") return false;
-  if (blockInvest && isInvestMemo(r.memo)) return false;
-  return true;
-}
-
-
 // 입금 신청 승인/거절
 async function approveDeposit(db, ctx, rid) {
   rid = str(rid).trim();
@@ -104,7 +84,8 @@ async function rejectDeposit(db, rid) {
   const req = await col(db, "deposit_requests").get(rid);
   if (!req) fail("신청서를 찾지 못했습니다.");
   if (str(req.status || "pending") !== "pending") fail("이미 처리된 신청입니다.");
-  await col(db, "deposit_requests").update(rid, { status: "rejected", processed_at: new Date() });
+  const ok = await col(db, "deposit_requests").updateIf(rid, { status: { $in: ["pending", null] } }, { status: "rejected", processed_at: new Date() });
+  if (!ok) fail("이미 처리된 신청입니다.");
   return true;
 }
 
@@ -162,7 +143,11 @@ export default {
       } else if (isLegacyAdminTx(tx)) {
         items.push({ key: `t:${tx._id}`, t: toDate(tx.created_at), memo: str(tx.memo), amount: toInt(tx.amount), kind: "legacy", sids: [str(tx.student_id)] });
       }
-      if (items.length >= 40) break;
+      // 40개를 넘는 순간 멈춤(마지막 묶음의 학생 수가 덜 세어지지 않도록 41번째가 생길 때 끊음)
+      if (items.length > 40) {
+        items.pop();
+        break;
+      }
     }
     const batchIds = items.filter((x) => x.key.startsWith("b:")).map((x) => x.key.slice(2));
     const treBatches = new Set((await db.collection("treasury_ledger").find({ batch_id: { $in: batchIds } }, { projection: { batch_id: 1 } }).toArray()).map((x) => x.batch_id));
@@ -210,7 +195,7 @@ export default {
   },
 
   async accounts_list(ctx) {
-    requireLogin(ctx);
+    requireAny(ctx, BANK_ADMIN);
     return { accounts: await listAccounts(ctx.db) };
   },
 
@@ -223,10 +208,6 @@ export default {
     }
     if (!target) fail("student_id가 없습니다.");
     const rows = await getTxRows(ctx.db, target, toInt(limit, 300) || 300);
-    rows.forEach((r) => {
-      r.can_rollback_admin = canRollbackRow(r, true);
-      r.can_rollback_user = canRollbackRow(r, false);
-    });
     let balance = null;
     if (target === ctx.sid) balance = toInt((await col(ctx.db, "students").get(target))?.balance);
     return { rows, balance };
@@ -239,6 +220,7 @@ export default {
     dep = toInt(dep);
     wd = toInt(wd);
     memo = str(memo).trim();
+    if (dep < 0 || wd < 0) fail("금액은 0보다 커야 합니다.");
     if ((dep > 0 && wd > 0) || (dep === 0 && wd === 0)) fail("입금/출금은 둘 중 하나만 입력해 주세요.");
     if (!memo) fail("내역(메모)을 입력해 주세요.");
     const recorder = adminRecorder(ctx);
@@ -267,6 +249,7 @@ export default {
     dep = toInt(dep);
     wd = toInt(wd);
     memo = str(memo).trim();
+    if (dep < 0 || wd < 0) fail("금액은 0보다 커야 합니다.");
     if ((dep > 0 && wd > 0) || (dep === 0 && wd === 0)) fail("입금/출금은 둘 중 하나만 입력해 주세요.");
     if (!memo) fail("내역(메모)을 입력해 주세요.");
     sids = (sids || []).map(String).filter(Boolean);
@@ -347,6 +330,7 @@ export default {
     dep = toInt(dep);
     wd = toInt(wd);
     if (!memo) fail("내역을 입력해 주세요.");
+    if (dep < 0 || wd < 0) fail("금액은 0보다 커야 합니다.");
     if ((dep > 0 && wd > 0) || (dep === 0 && wd === 0)) fail("입금/출금은 둘 중 하나만 입력해 주세요.");
     const s = ctx.student;
     const no = toInt(s.no);
@@ -402,4 +386,3 @@ export default {
   },
 };
 
-export { parseTemplateLabel };

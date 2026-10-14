@@ -4,7 +4,7 @@ import { api } from "../lib/api.js";
 import { useApp, useLoad, Cols, H3, Btn, Select, NumberInput, Info, Expander, DataTable, Loading } from "../components/ui.jsx";
 import { LedgerGrid } from "./Stats.jsx";
 
-export function scoreToGrade(s) {
+function scoreToGrade(s) {
   s = parseInt(s, 10) || 0;
   if (s >= 90) return 1;
   if (s >= 80) return 2;

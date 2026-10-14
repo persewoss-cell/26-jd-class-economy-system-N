@@ -100,13 +100,17 @@ export async function permsForStudent(db, studentDoc) {
   return perms;
 }
 
-// checkPin=true: 앱을 새로 열 때(새로고침)만 비밀번호 변경 여부 확인
-// (기존 앱도 새로고침 시점에만 저장된 이름/비번으로 다시 인증했음)
-export async function buildCtx(db, token, { checkPin = false } = {}) {
+// 로그인 유지 기간: 30일
+export const TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+// 요청마다 토큰 확인: 30일 지났거나 비밀번호가 바뀌었으면 즉시 로그아웃
+export async function buildCtx(db, token) {
   const ctx = { db, role: null, isAdmin: false, sid: "", name: "", student: null, perms: new Set() };
   const t = verifyToken(token);
   if (!t) return ctx;
+  if (!t.iat || Date.now() - Number(t.iat) > TOKEN_TTL_MS) return ctx;
   if (t.role === "admin") {
+    if (t.pv !== pinVersion(adminPin())) return ctx;
     ctx.role = "admin";
     ctx.isAdmin = true;
     ctx.name = ADMIN_NAME;
@@ -117,7 +121,7 @@ export async function buildCtx(db, token, { checkPin = false } = {}) {
     const doc = await db.collection("students").findOne({ _id: String(t.sid) });
     if (!doc || doc.is_active !== true) return ctx;
     // 비밀번호가 바뀌면 기존 로그인은 무효(재로그인 필요)
-    if (checkPin && t.pv && t.pv !== pinVersion(doc.pin)) return ctx;
+    if (t.pv !== pinVersion(doc.pin)) return ctx;
     ctx.role = "student";
     ctx.sid = String(doc._id);
     ctx.name = str(doc.name);
@@ -129,18 +133,6 @@ export async function buildCtx(db, token, { checkPin = false } = {}) {
 
 export function pinVersion(pin) {
   return crypto.createHash("sha256").update(`pv:${str(pin)}`).digest("hex").slice(0, 10);
-}
-
-export function can(ctx, need) {
-  return ctx.isAdmin || ctx.perms.has("admin_all") || ctx.perms.has(need);
-}
-
-export function hasTab(ctx, tab) {
-  return ctx.isAdmin || ctx.perms.has(`tab::${tab}`);
-}
-
-export function hasAdminFeature(ctx, tab) {
-  return ctx.isAdmin || ctx.perms.has(`admin::${tab}`);
 }
 
 // 기존 _get_recorder_label(True, login_name): 관리자 로그인이면 "관리자", 권한 받은 학생이면 "관리자(이름)"
@@ -176,11 +168,7 @@ export function requireStudent(ctx) {
 // 여러 조건 중 하나라도 맞으면 통과 (관리자는 항상 통과)
 export function requireAny(ctx, checks, msg = "권한이 없습니다.") {
   if (ctx.isAdmin) return;
-  for (const c of checks) {
-    if (c.startsWith("tab::") || c.startsWith("admin::")) {
-      if (ctx.perms.has(c)) return;
-    } else if (ctx.perms.has(c)) return;
-  }
+  for (const c of checks) if (ctx.perms.has(c)) return;
   fail(msg);
 }
 

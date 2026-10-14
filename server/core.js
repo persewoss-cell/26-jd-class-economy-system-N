@@ -65,28 +65,33 @@ export async function treasuryTx(db, { memo, income, expense, actor = "treasury"
   income = toInt(income);
   expense = toInt(expense);
   if (!memo) fail("내역이 필요합니다.");
+  if (income < 0 || expense < 0) fail("금액은 0보다 커야 합니다.");
   if ((income > 0 && expense > 0) || (income === 0 && expense === 0)) fail("세입/세출 중 하나만 입력하세요.");
   const signed = income > 0 ? income : -expense;
   return await treasuryApply(db, { memo, signed, actor, recorder });
 }
 
 // 관리자(또는 권한 학생)의 개별 입금/출금 (+선택 국고 반영). 출금은 잔액 부족이어도 허용
-export async function adminTx(db, { sid, memo, deposit = 0, withdraw = 0, applyTreasury = false, treasuryMemo = "", actor = "admin_auto", recorder, extra = {} }) {
+// requireBalance: 출금일 때 잔액이 모자라면 처리하지 않음 (마트 승인 등)
+export async function adminTx(db, { sid, memo, deposit = 0, withdraw = 0, applyTreasury = false, treasuryMemo = "", actor = "admin_auto", recorder, extra = {}, requireBalance = false }) {
   memo = str(memo).trim();
   deposit = toInt(deposit);
   withdraw = toInt(withdraw);
   if (!memo) fail("내역이 필요합니다.");
+  if (deposit < 0 || withdraw < 0) fail("금액은 0보다 커야 합니다.");
   if ((deposit > 0 && withdraw > 0) || (deposit === 0 && withdraw === 0)) fail("입금/출금 중 하나만 입력하세요.");
   if (!sid) fail("student_id가 없습니다.");
   const exists = await db.collection("students").findOne({ _id: String(sid) }, { projection: { _id: 1 } });
   if (!exists) fail("계정을 찾지 못했습니다.");
   const amount = deposit > 0 ? deposit : -withdraw;
   const type = deposit > 0 ? "deposit" : "withdraw";
+  // 잔액을 먼저 바꾸고(실패하면 국고도 건드리지 않음) 국고 반영
+  const doc = await applyBalance(db, sid, amount, requireBalance && type === "withdraw" ? { minBalance: withdraw } : {});
+  if (!doc) fail("잔액이 부족해 처리할 수 없어요.");
   if (applyTreasury) {
     const treSigned = type === "withdraw" ? withdraw : -deposit;
     await treasuryApply(db, { memo: str(treasuryMemo) || memo, signed: treSigned, actor: str(actor) || "auto", recorder, extra });
   }
-  const doc = await applyBalance(db, sid, amount);
   const newBal = toInt(doc && doc.balance);
   const txId = await insertTx(db, { sid, type, amount, balanceAfter: newBal, memo, recorder, extra });
   return { balance: newBal, tx_id: txId };
@@ -98,6 +103,7 @@ export async function studentTx(db, { student, memo, deposit = 0, withdraw = 0, 
   deposit = toInt(deposit);
   withdraw = toInt(withdraw);
   if (!memo) fail("내역이 필요합니다.");
+  if (deposit < 0 || withdraw < 0) fail("금액은 0보다 커야 합니다.");
   if ((deposit > 0 && withdraw > 0) || (deposit === 0 && withdraw === 0)) fail("입금/출금 중 하나만 입력하세요.");
   const sid = String(student._id);
   const recorder = str(student.name);
@@ -121,7 +127,7 @@ export async function studentTx(db, { student, memo, deposit = 0, withdraw = 0, 
 
 export function isSavingsMemo(memo) {
   memo = str(memo);
-  return memo.includes("적금 가입") || memo.includes("적금 해지") || memo.includes("적금 만기");
+  return memo.includes("적금 가입") || memo.includes("적금 해지") || memo.includes("적금 만기") || memo.includes("적금 중도해지");
 }
 
 export function isInvestMemo(memo) {
@@ -411,6 +417,8 @@ export async function removeTreasuryEntry(db, led) {
 }
 // 월급 입금 기록에 딸린 "월급 공제 세입" 국고 기록 (같은 달·직업·이름, 가장 가까운 시각)
 export async function findSalaryTreasury(db, tx, name) {
+  const linked = await db.collection("treasury_ledger").findOne({ salary_tx_id: String(tx._id) });
+  if (linked) return linked;
   const t = toDate(tx.created_at);
   if (!t) return null;
   const job = str(tx.memo).replace("월급 ", "").trim();
@@ -428,9 +436,17 @@ export async function removeSalaryPayment(db, tx, name, { dropPaylog = false } =
   if (dropPaylog) {
     const mkey = monthKey(toDate(tx.created_at) || new Date());
     const job = str(tx.memo).replace("월급 ", "").trim();
-    await db.collection("payroll_log").deleteMany({ month: mkey, student_id: str(tx.student_id), job });
+    const same = await db.collection("transactions").find({ student_id: str(tx.student_id), type: "deposit", memo: str(tx.memo) }, { projection: { created_at: 1 } }).toArray();
+    const stillPaid = same.some((x) => monthKey(toDate(x.created_at) || new Date()) === mkey);
+    if (!stillPaid) await db.collection("payroll_log").deleteMany({ month: mkey, student_id: str(tx.student_id), job });
   }
   return { removed: true, treasury };
+}
+
+// 지급일이 그 달에 없으면(예: 31일인데 30일까지인 달) 그 달 마지막 날로
+export function effectivePayDay(day, kp) {
+  const last = new Date(Date.UTC(kp.year, kp.month, 0)).getUTCDate();
+  return Math.min(Math.max(1, day), last);
 }
 
 export async function runAutoPayouts(db, { force = false } = {}) {
@@ -454,20 +470,25 @@ export async function runAutoPayouts(db, { force = false } = {}) {
       });
       if (!claimed) continue;
       const doc = await applyBalance(db, sid, payout);
+      // 학생 계정을 못 찾아 입금이 안 됐으면 만기 처리도 되돌려 다음에 다시 시도
+      if (!doc) {
+        await col(db, "savings").update(String(x._id), { status: str(x.status), result: x.result ?? null, processed_at: null, payout_amount: null });
+        continue;
+      }
       await insertTx(db, { sid, type: "maturity", amount: payout, balanceAfter: toInt(doc && doc.balance), memo: `적금 만기 지급 (${weeks}주)`, recorder: "시스템(적금)" });
     }
 
     const pc = (await col(db, "config").get("salary_payroll")) || {};
     const autoEnabled = !!pc.auto_enabled;
-    const payDay = Math.max(1, Math.min(31, ior(pc.pay_day, 25)));
     const kp = kstParts(nowD);
+    const payDay = effectivePayDay(ior(pc.pay_day, 25), kp);
     if (!(autoEnabled && kp.day >= payDay)) return;
     const mkey = monthKey(nowD);
     let lockId = `${mkey}_${String(payDay).padStart(2, "0")}`;
     // 이번 달 월급을 전체 회수한 뒤: 관리자가 정한 '다시 지급일'이 되어야 자동지급
     if (pc.hold_month === mkey) {
       const re = pc.repay && pc.repay.month === mkey ? ior(pc.repay.day, 0) : 0;
-      if (!re || kp.day < re) return;
+      if (!re || kp.day < effectivePayDay(re, kp)) return;
       lockId = `${mkey}_re${String(re).padStart(2, "0")}`;
     }
     const created = await col(db, "payroll_auto_run").create(lockId, { month: mkey, pay_day: payDay, run_at: new Date(), source: "auto_system" });
@@ -484,17 +505,18 @@ export async function runAutoPayouts(db, { force = false } = {}) {
       if (net <= 0) continue;
       for (let sid of job.assigned_ids || []) {
         sid = str(sid).trim();
-        if (!sid) continue;
+        if (!sid || !(sid in idToName)) continue; // 삭제된 학생은 지급 안 함
         if (await alreadyPaidThisMonth(db, mkey, sid, jobId, jobName)) continue;
+        let paid;
         try {
-          await adminTx(db, { sid, memo: `월급 ${jobName}`, deposit: net, actor: "system_salary", recorder: "관리자" });
+          paid = await adminTx(db, { sid, memo: `월급 ${jobName}`, deposit: net, actor: "system_salary", recorder: "관리자" });
         } catch {
           continue;
         }
         const ded = Math.max(0, gross - net);
         if (ded > 0) {
           const nm = idToName[sid] || "";
-          await treasuryApply(db, { memo: `월급 공제 세입(${mkey}) ${jobName}` + (nm ? ` - ${nm}` : ""), signed: ded, actor: "system_salary", recorder: "관리자" });
+          await treasuryApply(db, { memo: `월급 공제 세입(${mkey}) ${jobName}` + (nm ? ` - ${nm}` : ""), signed: ded, actor: "system_salary", recorder: "관리자", extra: { salary_tx_id: String(paid.tx_id) } });
         }
         await writePaylog(db, mkey, sid, net, jobName, "auto", jobId);
       }

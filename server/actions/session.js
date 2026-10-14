@@ -1,8 +1,8 @@
 // 로그인 / 사이드바(비밀번호 변경, 계정 생성·PIN변경·삭제) / 학생 상단 요약
 import { col } from "../db.js";
 import {
-  ADMIN_NAME, isAdminLogin, isAdminPin, pinOk, signToken, authStudent, findStudentByName,
-  fail, requireLogin, pinVersion, DEFAULT_CREDIT_SCORE, DEFAULT_CREDIT_GRADE,
+  ADMIN_NAME, adminPin, isAdminLogin, isAdminPin, pinOk, signToken, authStudent, findStudentByName,
+  fail, requireLogin, requireStudent, pinVersion, DEFAULT_CREDIT_SCORE, DEFAULT_CREDIT_GRADE,
 } from "../auth.js";
 import {
   activeStudents, loadRoleLookup, roleNameFor, investSummaryFor, calcCredit,
@@ -29,7 +29,7 @@ export default {
     pin = str(pin).trim();
     if (!name) fail("이름을 입력해 주세요.");
     if (isAdminLogin(name, pin)) {
-      return { token: signToken({ role: "admin" }), user: { role: "admin", name: ADMIN_NAME, sid: "", perms: ["admin_all"], invest_enabled: true } };
+      return { token: signToken({ role: "admin", pv: pinVersion(adminPin()) }), user: { role: "admin", name: ADMIN_NAME, sid: "", perms: ["admin_all"], invest_enabled: true } };
     }
     if (!pinOk(pin)) fail("학생 비밀번호는 4자리여야 해요.");
     const doc = await authStudent(db, name, pin);
@@ -38,26 +38,21 @@ export default {
     return { token, user: { role: "student", name: str(doc.name), sid: String(doc._id) } };
   },
 
-  async check_admin_pin(ctx, { pin }) {
-    return { valid: isAdminPin(pin) };
-  },
-
   async session(ctx) {
     if (!ctx.role) return { user: null };
     return { user: userInfo(ctx) };
   },
 
-  async change_pin_student(ctx, { name, old_pin, new_pin }) {
-    name = str(name).trim();
+  // 로그인한 학생 본인 비밀번호 변경 → 새 토큰을 돌려줘 이 기기는 로그인 유지(다른 기기는 로그아웃)
+  async change_pin_student(ctx, { old_pin, new_pin }) {
+    requireStudent(ctx);
     old_pin = str(old_pin).trim();
     new_pin = str(new_pin).trim();
-    if (!name) fail("이름이 필요합니다.");
     if (!pinOk(old_pin)) fail("기존 비밀번호는 4자리여야 합니다.");
     if (!pinOk(new_pin)) fail("새 비밀번호는 4자리여야 합니다.");
-    const doc = await authStudent(ctx.db, name, old_pin);
-    if (!doc) fail("이름 또는 기존 비밀번호가 틀립니다.");
-    await col(ctx.db, "students").update(doc._id, { pin: String(new_pin) });
-    return {};
+    if (str(ctx.student.pin) !== old_pin) fail("기존 비밀번호가 틀립니다.");
+    await col(ctx.db, "students").update(ctx.sid, { pin: String(new_pin) });
+    return { token: signToken({ role: "student", sid: ctx.sid, pv: pinVersion(new_pin) }) };
   },
 
   // 사이드바 [관리자] 계정 생성 / PIN 변경 / 삭제 (관리자 비밀번호로 확인)
@@ -80,7 +75,7 @@ export default {
       const newNo = maxNo + 1;
       await col(db, "students").add({
         no: newNo, name, pin, balance: 0, credit_score: DEFAULT_CREDIT_SCORE, credit_grade: DEFAULT_CREDIT_GRADE,
-        is_active: true, role_id: "", io_enabled: true, invest_enabled: true, created_at: new Date(),
+        is_active: true, role_id: "", invest_enabled: true, created_at: new Date(),
       });
       return { new_no: newNo };
     }

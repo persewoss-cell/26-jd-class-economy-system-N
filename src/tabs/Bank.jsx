@@ -13,11 +13,16 @@ function UndoPanel({ onClose }) {
   const [key, setKey] = useState("");
   const [pin, setPin] = useState("");
   const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
   const pick = rows.find((r) => r.key === key) || rows[0];
   const run = async () => {
+    // 목록을 새로 불러오는 중이거나 이미 실행 중이면 무시(엔터 연타 방지)
+    if (busy || list.loading) return;
     setErr("");
     if (!pick) return setErr("되돌릴 기록이 없어요.");
+    setBusy(true);
     const r = await api("undo_apply", { admin_pin: pin, key: pick.key });
+    setBusy(false);
     if (r.ok) {
       app.toast(`되돌리기 완료 (학생 ${r.students}명${r.treasury ? " · 국고 기록 포함" : ""})`, "↩️");
       setPin("");
@@ -36,7 +41,9 @@ function UndoPanel({ onClose }) {
           <Select label="되돌릴 기록 (최근 순)" value={pick ? pick.key : ""} options={rows.map((r) => ({ value: r.key, label: r.label }))} onChange={setKey} />
           <Cols w={[2, 1]} va="bottom">
             <TextInput label="관리자 비밀번호" type="password" value={pin} onChange={setPin} onEnter={run} />
-            <Btn onClick={run}>↩️ 되돌리기</Btn>
+            <Btn onClick={run} disabled={busy || list.loading}>
+              ↩️ 되돌리기
+            </Btn>
           </Cols>
         </>
       ) : null}
@@ -346,7 +353,7 @@ export function BankAdmin() {
 
   return (
     <>
-      <ConfirmModal open={!!askTreasury} title="🏛️ 국고 반영" message="국고에 반영할까요?" onYes={() => answerTreasury(true)} onNo={() => answerTreasury(false)} />
+      <ConfirmModal open={!!askTreasury} title="🏛️ 국고 반영" message="국고에 반영할까요?" onYes={() => answerTreasury(true)} onNo={() => answerTreasury(false)} onCancel={() => setAskTreasury(null)} />
       <SubTabs tabs={["개인", "전체"]} active={sub} onChange={setSub} />
       {sub === "전체" ? (
         <>

@@ -184,6 +184,3 @@ export function normStatus(v) {
   return "X";
 }
 
-export function numComma(n) {
-  return toInt(n, 0).toLocaleString("en-US");
-}

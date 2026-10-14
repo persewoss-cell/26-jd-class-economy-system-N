@@ -177,9 +177,9 @@ export default {
       diff: as2(pr.diff),
       real_diff: as2(pr.diff),
       profit: Math.round(pr.profit),
-      redeem_amount: toInt(pr.redeem),
+      redeem_amount: deposit,
       redeemed_label: sellLabel,
-      redeemed_amount: toInt(pr.redeem),
+      redeemed_amount: deposit,
     });
     return {};
   },

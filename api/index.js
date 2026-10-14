@@ -47,7 +47,9 @@ export default async function handler(req, res) {
 
     const auth = String(req.headers.authorization || "");
     const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-    const ctx = await buildCtx(db, token, { checkPin: action === "session" });
+    const ctx = await buildCtx(db, token);
+    // 토큰이 만료됐거나 비밀번호가 바뀐 경우 → 화면에서 바로 로그아웃
+    if (token && !ctx.role && action !== "login") return res.status(200).json({ ok: false, auth_lost: true, error: "로그인이 만료되었어요. 다시 로그인해 주세요." });
 
     // 자동 적금 만기/월급 지급: 로그인·새로고침(세션 확인) 때만 시도 (탭을 누를 때마다 하지 않아 빠름)
     if (action === "session" || action === "login") await runAutoPayouts(db);

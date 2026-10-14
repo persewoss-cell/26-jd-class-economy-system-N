@@ -20,6 +20,7 @@ const TAB_BUNDLE = {
 
 const EXCLUDED = ["👥 계정 정보", "🏦 내 통장", "🏦 은행(적금)", "📈 투자", "🛒마트", "🏷️ 경매", "🍀 복권"];
 export const ALLOWED_TAB_OPTIONS = ALL_TABS.filter((t) => !EXCLUDED.includes(t));
+const ADMIN_TABS = ["🏦 내 통장", "🏦 은행(적금)", "📈 투자", "🛒마트"];
 export const ADMIN_OPTION_LABELS = ["💰입금/출금(관리자)", "🏦 은행(적금)(관리자)", "📈 투자(관리자)", "🛒마트(관리자)"];
 
 function keysFor(kind, tab) {
@@ -60,6 +61,10 @@ export default {
     requireAny(ctx, PERM, "권한이 없는 사용자입니다.");
     sids = (sids || []).map(String);
     if (!sids.length) fail("먼저 학생을 선택해 주세요.");
+    if (op !== "grant" && op !== "revoke") fail("잘못된 요청입니다.");
+    const okTab = kind === "tab" ? ALLOWED_TAB_OPTIONS.includes(tab) : kind === "admin" ? ADMIN_TABS.includes(tab) : false;
+    // 회수는 예전에 받은 권한(목록에서 빠진 탭 포함)도 지울 수 있게 허용
+    if (!okTab && !(op === "revoke" && (kind === "tab" || kind === "admin") && str(tab))) fail("알 수 없는 권한입니다.");
     const keys = keysFor(kind, tab);
     let n = 0;
     for (const sid of sids) {
@@ -68,13 +73,6 @@ export default {
       n += 1;
     }
     return { n };
-  },
-
-  async perm_revoke_all(ctx) {
-    requireAny(ctx, PERM, "권한이 없는 사용자입니다.");
-    const studs = await activeStudents(ctx.db);
-    for (const s of studs) await col(ctx.db, "students").update(s.student_id, { extra_permissions: [] });
-    return { n: studs.length };
   },
 
   async perm_bulk(ctx, { rows, overwrite }) {
@@ -181,8 +179,9 @@ export default {
       }
       const payload = {
         no: Math.trunc(no), name, pin, is_active: true,
-        io_enabled: truthy(r["입출금활성화"]), invest_enabled: truthy(r["투자활성화"]),
       };
+      // 투자활성화 컬럼이 있을 때만 반영 (없으면 기존 값 유지, 새 계정은 사용)
+      if (r["투자활성화"] !== undefined) payload.invest_enabled = truthy(r["투자활성화"]);
       const n = Math.trunc(no);
       if (byNo[n]) {
         await col(db, "students").update(byNo[n], payload);
@@ -191,7 +190,7 @@ export default {
         await col(db, "students").update(byName[name], payload);
         updated += 1;
       } else {
-        await col(db, "students").add({ ...payload, balance: 0, credit_score: DEFAULT_CREDIT_SCORE, credit_grade: DEFAULT_CREDIT_GRADE, role_id: "", created_at: new Date() });
+        await col(db, "students").add({ invest_enabled: true, ...payload, balance: 0, credit_score: DEFAULT_CREDIT_SCORE, credit_grade: DEFAULT_CREDIT_GRADE, role_id: "", created_at: new Date() });
         created += 1;
       }
     }

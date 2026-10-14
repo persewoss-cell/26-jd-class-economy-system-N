@@ -2,15 +2,15 @@
 import { col } from "../db.js";
 import { fail, requireAny, isAdminPin, adminRecorder } from "../auth.js";
 import {
-  getSalaryCfg, calcNet, alreadyPaidThisMonth, writePaylog, adminTx, treasuryApply, listAccounts, activeStudents, removeSalaryPayment, runAutoPayouts,
+  getSalaryCfg, calcNet, alreadyPaidThisMonth, writePaylog, adminTx, treasuryApply, listAccounts, activeStudents, removeSalaryPayment, runAutoPayouts, effectivePayDay,
 } from "../core.js";
-import { str, toInt, ior, forr, toDate, monthKey, kstParts } from "../../shared/format.js";
+import { str, toInt, ior, toDate, monthKey, kstParts } from "../../shared/format.js";
 
 const JOBS = ["tab::💼 직업/월급", "jobs_write"];
 
 async function payrollCfg(db) {
   const d = await col(db, "config").get("salary_payroll");
-  if (!d) return { pay_day: 17, auto_enabled: false, repay: null };
+  if (!d) return { pay_day: 25, auto_enabled: false, repay: null };
   const mkey = monthKey();
   const hold = d.hold_month === mkey;
   const rp = hold && d.repay && d.repay.month === mkey ? ior(d.repay.day, 0) : null;
@@ -146,15 +146,17 @@ async function removeSalaries(db, targets, { dropPaylog }) {
   return { fixed, treasury_fixed: tre, errors: errs };
 }
 
+// 삭제(비활성)된 학생은 빼고
 async function manualTargets(db, cfg) {
   const jobs = await db.collection("job_salary").find({}).sort({ order: 1 }).toArray();
+  const active = new Set((await activeStudents(db)).map((x) => x.student_id));
   const out = [];
   for (const x of jobs) {
     const net = calcNet(toInt(x.salary), cfg);
     if (net <= 0) continue;
     for (let sid of x.assigned_ids || []) {
       sid = str(sid).trim();
-      if (sid) out.push({ sid, amt: net, job: str(x.job), gross: toInt(x.salary), job_id: String(x._id) });
+      if (sid && (!active || active.has(sid))) out.push({ sid, amt: net, job: str(x.job), gross: toInt(x.salary), job_id: String(x._id) });
     }
   }
   return out;
@@ -185,8 +187,10 @@ export default {
 
   async salary_cfg_save(ctx, { tax_percent, desk_rent, electric_fee, health_fee }) {
     requireAny(ctx, JOBS, "접근 권한이 없습니다.");
+    // 0도 저장되게 (빈칸일 때만 기본값), 음수는 0으로
+    const n = (v, d) => (v === null || v === undefined || v === "" || !Number.isFinite(Number(v)) ? d : Math.max(0, Number(v)));
     await col(ctx.db, "config").set("salary_deductions", {
-      tax_percent: forr(tax_percent, 10.0), desk_rent: ior(desk_rent, 50), electric_fee: ior(electric_fee, 10), health_fee: ior(health_fee, 10), updated_at: new Date(),
+      tax_percent: n(tax_percent, 10.0), desk_rent: Math.trunc(n(desk_rent, 50)), electric_fee: Math.trunc(n(electric_fee, 10)), health_fee: Math.trunc(n(health_fee, 10)), updated_at: new Date(),
     }, true);
     return {};
   },
@@ -206,29 +210,36 @@ export default {
     if (confirm_repay) {
       if (str(admin_pin).trim() === "" || !isAdminPin(admin_pin)) fail("관리자 비밀번호(PIN)가 올바르지 않습니다.");
     }
+    // 같은 버튼을 빠르게 두 번 눌러도 한 번만 (5초 잠금)
+    if (!(await col(db, "payroll_auto_run").create(`manual_${confirm_repay ? "re" : "pay"}_${Math.floor(Date.now() / 5000)}`, { month: mkey, run_at: new Date(), source: "manual_lock" }))) fail("지급 처리 중이에요. 잠시 후 다시 시도해 주세요.");
     const accs = await listAccounts(db);
     const idToName = Object.fromEntries(accs.map((a) => [a.student_id, a.name]));
     const recorder = adminRecorder(ctx);
     let paid = 0;
     let err = 0;
+    let skipped = 0;
     for (const t of targets) {
+      // 재지급 확인(관리자 비밀번호) 없이는 이번 달 이미 받은 학생은 건너뜀
+      if (!confirm_repay && (await alreadyPaidThisMonth(db, mkey, t.sid, t.job_id, t.job))) {
+        skipped += 1;
+        continue;
+      }
       const nm = idToName[t.sid] || "";
-      let ok = true;
+      let paidTx;
       try {
-        await adminTx(db, { sid: t.sid, memo: `월급 ${t.job}`, deposit: t.amt, recorder });
+        paidTx = await adminTx(db, { sid: t.sid, memo: `월급 ${t.job}`, deposit: t.amt, recorder });
       } catch {
-        ok = false;
+        err += 1;
+        continue;
       }
       const ded = Math.max(0, t.gross - t.amt);
       if (ded > 0) {
-        await treasuryApply(db, { memo: `월급 공제 세입(${mkey}) ${t.job}` + (nm ? ` - ${nm}` : ""), signed: ded, actor: "system_salary", recorder });
+        await treasuryApply(db, { memo: `월급 공제 세입(${mkey}) ${t.job}` + (nm ? ` - ${nm}` : ""), signed: ded, actor: "system_salary", recorder, extra: { salary_tx_id: String(paidTx.tx_id) } });
       }
-      if (ok) {
-        await writePaylog(db, mkey, t.sid, t.amt, t.job, "manual", t.job_id);
-        paid += 1;
-      } else err += 1;
+      await writePaylog(db, mkey, t.sid, t.amt, t.job, "manual", t.job_id);
+      paid += 1;
     }
-    return { paid, err };
+    return { paid, err, skipped };
   },
 
   async payroll_fix(ctx, { mode, admin_pin }) {
@@ -242,18 +253,16 @@ export default {
       const scan = await scanMonth(db, "all");
       if (!scan.targets.length) return { none: true };
       // 이번 달 지급 기록까지 지워서 '한 달 한 번' 지급을 다시 할 수 있는 상태로
+      const pc = await payrollCfg(db);
+      const kp = kstParts(new Date());
+      const afterPayDay = pc.auto_enabled && kp.day >= effectivePayDay(pc.pay_day, kp);
+      // 지급일이 지난 뒤 전부 회수 → 바로 다시 나가지 않게 '먼저' 멈춰 두고 기록을 지움
+      if (afterPayDay) await col(db, "config").set("salary_payroll", { hold_month: mkey, repay: null, updated_at: new Date() }, true);
       const r = await removeSalaries(db, scan.targets, { dropPaylog: true });
       await db.collection("payroll_log").deleteMany({ month: mkey });
       await db.collection("payroll_auto_run").deleteMany({ month: mkey });
-      const pc = await payrollCfg(db);
-      const kp = kstParts(new Date());
-      if (pc.auto_enabled && kp.day >= pc.pay_day) {
-        // 지급일이 지난 뒤 전부 회수 → 바로 다시 나가지 않게 멈추고, 다시 지급할 날을 물어봄
-        await col(db, "config").set("salary_payroll", { hold_month: mkey, repay: null, updated_at: new Date() }, true);
-        r.need_repay = true;
-      } else {
-        await col(db, "config").set("salary_payroll", { hold_month: null, repay: null, updated_at: new Date() }, true);
-      }
+      if (afterPayDay) r.need_repay = true;
+      else await col(db, "config").set("salary_payroll", { hold_month: null, repay: null, updated_at: new Date() }, true);
       return r;
     }
     const scan = await scanMonth(db, "dup");
@@ -266,6 +275,8 @@ export default {
     requireAny(ctx, JOBS, "접근 권한이 없습니다.");
     const db = ctx.db;
     const mkey = monthKey();
+    const pc = (await col(db, "config").get("salary_payroll")) || {};
+    if (pc.hold_month !== mkey) fail("이번 달은 다시 지급일을 정할 필요가 없어요.");
     const today = kstParts(new Date()).day;
     const d = skip ? 0 : Math.max(today, Math.min(31, ior(day, today)));
     await col(db, "config").set("salary_payroll", { hold_month: mkey, repay: { month: mkey, day: d }, updated_at: new Date() }, true);
@@ -311,16 +322,6 @@ export default {
       return { changed: true };
     }
     return { changed: false };
-  },
-
-  async job_clear_all(ctx) {
-    requireAny(ctx, JOBS, "접근 권한이 없습니다.");
-    const rows = await listJobRows(ctx.db);
-    for (const r of rows) {
-      const c = Math.max(0, toInt(r.raw_count, 0));
-      await col(ctx.db, "job_salary").update(r._id, { assigned_ids: c > 0 ? Array(c).fill("") : [] });
-    }
-    return {};
   },
 
   async job_save(ctx, { job_id, job, salary, student_count }) {

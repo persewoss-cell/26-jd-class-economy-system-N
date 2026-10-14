@@ -29,6 +29,13 @@ function setBusy(delta) {
   busyListeners.forEach((f) => f(busyCount > 0));
 }
 
+// 로그인이 풀렸을 때(30일 경과·비밀번호 변경) 알림
+const authLostListeners = new Set();
+export function onAuthLost(fn) {
+  authLostListeners.add(fn);
+  return () => authLostListeners.delete(fn);
+}
+
 // 결과: { ok: true, ... } 또는 { ok: false, error }
 export async function api(action, args = {}) {
   setBusy(1);
@@ -39,11 +46,17 @@ export async function api(action, args = {}) {
       body: JSON.stringify({ action, args }),
     });
     const text = await res.text();
+    let r;
     try {
-      return JSON.parse(text);
+      r = JSON.parse(text);
     } catch {
       return { ok: false, error: `서버 응답 오류 (${res.status})` };
     }
+    if (r && r.auth_lost) {
+      setToken("");
+      authLostListeners.forEach((f) => f());
+    }
+    return r;
   } catch (e) {
     return { ok: false, error: `네트워크 오류: ${e.message || e}` };
   } finally {

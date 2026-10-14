@@ -77,7 +77,6 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; colo
   max-width: 560px; width: 100%; margin: 2rem auto 0; background: var(--card); border-radius: 22px; box-shadow: var(--shadow);
   padding: 2rem 2rem 1.6rem; text-align: center;
 }
-.login-emoji { font-size: 2.6rem; line-height: 1; margin-bottom: 0.5rem; }
 .login-title { font-size: 1.5rem; font-weight: 800; }
 .login-sub { color: var(--muted); font-size: 0.92rem; margin-bottom: 1.2rem; }
 .login-form { text-align: left; }
@@ -94,7 +93,6 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; colo
 
 /* ---------- 제목/텍스트 ---------- */
 h1, h2, h3, h4 { margin: 0; line-height: 1.3; }
-.app-title { font-size: 1.6rem; font-weight: 800; }
 .h2 { font-size: 1.6rem; font-weight: 800; padding: 0.2rem 0; }
 .h3, .subheader {
   font-size: 1.18rem; font-weight: 800; padding: 0.9rem 0 0.15rem; display: flex; align-items: center; gap: 0.5rem;
@@ -118,7 +116,6 @@ h1, h2, h3, h4 { margin: 0; line-height: 1.3; }
 .cols.va-center { align-items: center; }
 .cols.va-bottom { align-items: end; }
 .cols.gap-small { gap: 0.6rem; }
-.cols.gap-large { gap: 2rem; }
 .cols > .col { min-width: 0; display: flex; flex-direction: column; gap: var(--gap); }
 
 /* ---------- 알림 박스 ---------- */
@@ -296,7 +293,6 @@ h1, h2, h3, h4 { margin: 0; line-height: 1.3; }
 .tbl-wrap:has(.tbl-tools) { overflow: visible; }
 .tbl-tools button { height: 1.9rem; border: none; border-radius: 8px; background: var(--lav-l); color: var(--lav-d); cursor: pointer; font-size: 0.8rem; font-weight: 700; padding: 0 0.65rem; }
 .tbl-scroll { overflow: auto; max-height: 420px; -webkit-overflow-scrolling: touch; border-radius: var(--radius); }
-.tbl-scroll.tall { max-height: 900px; }
 table.tbl { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 0.9rem; }
 table.tbl th, table.tbl td { padding: 0.55rem 0.75rem; border-bottom: 1px solid #f0f3f7; white-space: nowrap; }
 table.tbl th { position: sticky; top: 0; background: #f7f9fc; color: #5a6578; font-weight: 700; font-size: 0.84rem; text-align: center; cursor: pointer; z-index: 1; user-select: none; }
@@ -397,11 +393,13 @@ table.ledger { border-collapse: separate; border-spacing: 0; font-size: 0.92rem;
 
 /* ---------- 확인 팝업 ---------- */
 .modal-backdrop { position: fixed; inset: 0; z-index: 250; background: rgba(45, 55, 72, 0.35); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; padding: 16px; animation: mfade 0.12s ease-out; }
-.modal { background: #fff; border-radius: 22px; width: min(380px, 100%); padding: 1.6rem 1.4rem 1.3rem; box-shadow: var(--shadow-lg); text-align: center; animation: mpop 0.16s ease-out; }
+.modal { background: #fff; border-radius: 22px; width: min(380px, 100%); padding: 1.6rem 1.4rem 1.3rem; box-shadow: var(--shadow-lg); text-align: center; animation: mpop 0.16s ease-out; position: relative; }
 .modal-title { font-size: 0.92rem; color: var(--muted); font-weight: 700; margin-bottom: 0.35rem; }
-.modal-msg { font-size: 1.3rem; font-weight: 800; margin-bottom: 1.3rem; word-break: keep-all; }
+.modal-msg { font-size: 1.3rem; font-weight: 800; margin-bottom: 1.3rem; word-break: keep-all; white-space: pre-line; }
 .modal-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
 .modal-btns .btn { min-height: 3rem; font-size: 1.05rem; }
+.modal-btns .btn.primary.tone-danger { background: var(--out); color: #fff; box-shadow: 0 4px 12px rgba(255, 123, 134, 0.35); }
+.modal-btns .btn.primary.tone-danger:hover:not(:disabled) { background: #f0606d; }
 @keyframes mfade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes mpop { from { transform: scale(0.94); opacity: 0; } to { transform: none; opacity: 1; } }
 
@@ -469,7 +467,6 @@ table.ledger { border-collapse: separate; border-spacing: 0; font-size: 0.92rem;
 .cols .field > label.lbl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
 .modal-body { text-align: left; margin: -0.4rem 0 1.1rem; }
 .modal.confirm-wide { width: min(520px, 100%); }
-.modal-msg { white-space: pre-line; }
 .check-list { display: flex; flex-direction: column; gap: 0.2rem; max-height: 300px; overflow: auto; padding: 0.4rem 0.6rem; background: var(--field); border-radius: var(--radius-s); }
 .sum-value { display: flex; align-items: baseline; justify-content: center; gap: 0.35rem; margin-top: 0.2rem; }
 .sum-value .sum-label { margin: 0 0.25rem 0 0; font-size: 0.95rem; font-weight: 700; }

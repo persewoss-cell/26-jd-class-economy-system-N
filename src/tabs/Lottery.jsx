@@ -19,6 +19,7 @@ function LotteryAdmin() {
   const [err, setErr] = useState("");
   const [drawErr, setDrawErr] = useState("");
   const [finErr, setFinErr] = useState("");
+  const [askClose, setAskClose] = useState(false);
   if (error) return <ErrorBox>{error}</ErrorBox>;
   if (!data) return <Loading />;
 
@@ -57,8 +58,19 @@ function LotteryAdmin() {
         <NumberInput label="1등 백분율(%)" stepper={false} min={0} max={100} value={cfg.first} onChange={(v) => setCfg((c) => ({ ...c, first: v }))} />
         <NumberInput label="2등 백분율(%)" stepper={false} min={0} max={100} value={cfg.second} onChange={(v) => setCfg((c) => ({ ...c, second: v }))} />
         <Btn onClick={() => run("lottery_open", { ticket_price: cfg.price, tax_rate: cfg.tax, first_pct: cfg.first, second_pct: cfg.second, third_prize: cfg.third }, (r) => `복권 ${r.round_no}회 개시`, "복권 개시 실패")}>개시</Btn>
-        <Btn onClick={() => run("lottery_close", {}, "복권 마감 완료", "복권 마감 실패")}>마감</Btn>
+        <Btn onClick={() => setAskClose(true)}>마감</Btn>
       </Cols>
+      <ConfirmModal
+        open={askClose}
+        title="🍀 복권 마감"
+        message={data.open ? `진행 중인 ${data.open.round_no}회 복권을 마감할까요? 마감하면 더 이상 구매할 수 없어요.` : "진행 중인 복권을 마감할까요?"}
+        yesText="마감"
+        onYes={async () => {
+          setAskClose(false);
+          await run("lottery_close", {}, "복권 마감 완료", "복권 마감 실패");
+        }}
+        onNo={() => setAskClose(false)}
+      />
       {cfg.first + cfg.second !== 100 ? <Warning>1등 + 2등 당첨 백분율의 합은 반드시 100이어야 합니다.</Warning> : null}
       <ErrorBox>{err}</ErrorBox>
       {data.open ? <Success>{`진행 중 복권: ${data.open.round_no}회 | 가격 ${data.open.ticket_price}`}</Success> : <Info>개시된 복권이 없습니다.</Info>}
@@ -133,6 +145,7 @@ function LotteryAdmin() {
           <NumberInput key={l} label={`${l} 당첨번호`} min={1} max={20} value={wn[i]} onChange={(v) => setWn((a) => a.map((x, j) => (j === i ? v : x)))} />
         ))}
         <Btn
+          disabled={!!(cur && cur.payout_done)}
           onClick={async () => {
             setDrawErr("");
             if (!cur) return setDrawErr("대상 복권 회차가 없습니다.");
@@ -216,11 +229,11 @@ function LotteryUser() {
   const empty = () => Array.from({ length: 5 }, () => ["", "", "", ""]);
   const [games, setGames] = useState(empty);
   const [errs, setErrs] = useState([]);
+  const [askBuy, setAskBuy] = useState(null);
   if (error) return <ErrorBox>{error}</ErrorBox>;
   if (!data) return <Loading />;
   const o = data.open;
 
-  const [askBuy, setAskBuy] = useState(null);
   const buy = async () => {
     const valid = [];
     const e = [];
@@ -273,6 +286,7 @@ function LotteryUser() {
                   label={`${gi + 1}게임 ${ni + 1}칸`}
                   className={`lot-in-${gi}`}
                   placeholder="(숫자 입력칸)"
+                  inputMode="numeric"
                   value={v}
                   onChange={(val) => setGames((gs) => gs.map((row, r) => (r === gi ? row.map((x, c) => (c === ni ? val : x)) : row)))}
                 />

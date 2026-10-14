@@ -15,6 +15,11 @@ function normNums(nums) {
   return out.sort((a, b) => a - b);
 }
 
+// 0도 올바른 값(예: 3등 당첨금 0)으로 인정 — 비어 있을 때만 기본값
+function iz(v, d) {
+  return v === null || v === undefined || v === "" ? d : toInt(v, d);
+}
+
 async function getState(db) {
   const d = await col(db, "config").get("lottery_state");
   if (!d) return { current_round_no: 0, current_round_id: "", status: "idle" };
@@ -84,9 +89,9 @@ function financials(r) {
   const payout = winners.reduce((s, w) => s + toInt(w.prize), 0);
   const adminWin = winners.filter((w) => w.is_admin || (!str(w.student_id).trim() && str(w.student_name).trim() === ADMIN_NAME)).reduce((s, w) => s + toInt(w.prize), 0);
   const tax = ior(r.tax_rate, 40);
-  const fp = ior(r.first_pct, 80);
-  const sp = ior(r.second_pct, 20);
-  const third = ior(r.third_prize, 20);
+  const fp = iz(r.first_pct, 80);
+  const sp = iz(r.second_pct, 20);
+  const third = iz(r.third_prize, 20);
   const c3 = winners.filter((w) => toInt(w.rank) === 3).length;
   const pool = Math.max(sales - third * c3, 0);
   const c1 = winners.filter((w) => toInt(w.rank) === 1).length;
@@ -104,13 +109,21 @@ async function payPrizes(db, rid) {
   const claimed = await col(db, "lottery_rounds").updateIf(rid, { payout_done: { $ne: true }, payout_paying: { $ne: true } }, { payout_paying: true });
   if (!claimed) fail("이미 당첨금 지급이 완료된 회차입니다.");
   let paid = 0;
-  for (const w of r.winners || []) {
+  const winners = r.winners || [];
+  for (let i = 0; i < winners.length; i++) {
+    const w = winners[i];
     const sid = str(w.student_id);
     const prize = toInt(w.prize);
     const rank = toInt(w.rank);
     if (!sid || prize <= 0) continue;
+    // 중간에 실패했다가 다시 지급할 때 이미 받은 사람은 건너뜀
+    if (w.paid) {
+      paid += prize;
+      continue;
+    }
     try {
       await adminTx(db, { sid, memo: `복권 ${toInt(r.round_no)}회 ${rank}등 당첨금`, deposit: prize, recorder: "관리자" });
+      await db.collection("lottery_rounds").updateOne({ _id: rid }, { $set: { [`winners.${i}.paid`]: true } });
     } catch (e) {
       await col(db, "lottery_rounds").update(rid, { payout_paying: false });
       fail(`당첨금 지급 실패: ${e.userMessage || e.message}`);
@@ -236,9 +249,9 @@ export default {
     if (pending) fail("현재 진행되는 복권이 완료되지 않았습니다. (직전 복권의 장부/국고 반영을 먼저 완료해 주세요)");
     const price = ior(ticket_price, 20);
     const tax = ior(tax_rate, 40);
-    const fp = ior(first_pct, 80);
-    const sp = ior(second_pct, 20);
-    const third = ior(third_prize, 20);
+    const fp = iz(first_pct, 80);
+    const sp = iz(second_pct, 20);
+    const third = iz(third_prize, 20);
     if (price <= 1) fail("복권 가격은 1보다 커야 합니다.");
     if (!(tax >= 1 && tax <= 100)) fail("세금(%)은 1~100 사이여야 합니다.");
     if (fp < 0 || sp < 0 || fp + sp !== 100) fail("1등/2등 당첨 백분율의 합은 100이어야 합니다.");
@@ -308,12 +321,13 @@ export default {
     const rnd = await col(db, "lottery_rounds").get(rid);
     if (!rnd) fail("복권 회차를 찾지 못했습니다.");
     if (!["closed", "drawn"].includes(str(rnd.status))) fail("마감된 복권만 추첨할 수 있습니다.");
+    if (rnd.payout_done || rnd.payout_paying || rnd.ledger_applied) fail("당첨금 지급이 시작된 회차는 당첨번호를 바꿀 수 없어요.");
     const ents = await listEntries(db, rid);
     const price = ior(rnd.ticket_price, 20);
     const tax = ior(rnd.tax_rate, 40);
-    const fp = ior(rnd.first_pct, 80);
-    const sp = ior(rnd.second_pct, 20);
-    const third = ior(rnd.third_prize, 20);
+    const fp = iz(rnd.first_pct, 80);
+    const sp = iz(rnd.second_pct, 20);
+    const third = iz(rnd.third_prize, 20);
     const sales = price * ents.length;
     const w1 = [];
     const w2 = [];

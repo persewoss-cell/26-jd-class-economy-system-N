@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, getToken, setToken, remember, onBusy } from "./lib/api.js";
-import { AppCtx, Cols, TextInput, Checkbox, Btn, ErrorBox, Toasts, Loading, useLoad, Info, prefetch, clearLoadCache } from "./components/ui.jsx";
+import { api, getToken, setToken, remember, onBusy, onAuthLost } from "./lib/api.js";
+import { AppCtx, Cols, TextInput, Checkbox, Btn, ErrorBox, Toasts, Loading, Info, prefetch, clearLoadCache } from "./components/ui.jsx";
 import { StudentPinModal, AdminAccountModal } from "./components/AccountModals.jsx";
 import UserHeader from "./components/UserHeader.jsx";
 import { BankAdmin, BankStudent } from "./tabs/Bank.jsx";
@@ -62,7 +62,7 @@ const TAB_LOADS = {
   "🎯 목표": () => [["goal_load", {}]],
 };
 
-export const ALL_TABS = [
+const ALL_TABS = [
   "🏦 내 통장", "🔎 개별조회", "💼 직업/월급", "🏛️ 국세청(국고)", "📊 통계청", "💳 신용등급", "🏦 은행(적금)",
   "📈 투자", "⭐ 권한부여", "👥 계정 정보", "🛒마트", "🏷️ 경매", "🍀 복권", "🧾 로그기록",
 ];
@@ -287,6 +287,16 @@ export default function App() {
     setActive(null);
   };
 
+  useEffect(
+    () =>
+      onAuthLost(() => {
+        if (!user) return;
+        logout();
+        toast("로그인이 풀렸어요. 다시 로그인해 주세요.", "🔒");
+      }),
+    [user] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
   const ctx = useMemo(() => ({ user, toast, refresh, ver }), [user, toast, refresh, ver]);
 
   return (
@@ -367,4 +377,3 @@ export default function App() {
   );
 }
 
-export { useLoad };

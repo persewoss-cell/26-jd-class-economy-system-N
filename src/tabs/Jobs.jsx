@@ -325,26 +325,27 @@ function JobAssign({ data, reload }) {
   const app = useApp();
   const accOptions = data.students.map((r) => `${r.no} ${r.name}`);
   const labelToId = Object.fromEntries(data.students.map((r) => [`${r.no} ${r.name}`, r.student_id]));
-  const jobLabels = data.rows.map((r) => {
+  // 고용 후 '현재 고용수'가 바뀌어도 고른 직업이 유지되도록 직업 id로 기억
+  const jobOptions = data.rows.map((r) => {
     const cnt = Math.max(0, parseInt(r.student_count, 10) || 1);
     const hired = r.assigned_ids.filter((s) => String(s).trim()).length;
-    return `${r.order} | ${r.job} (월급 ${r.salary}) | 배정수 ${cnt} | 현재 고용수 ${hired}`;
+    return { value: r._id, label: `${r.order} | ${r.job} (월급 ${r.salary}) | 배정수 ${cnt} | 현재 고용수 ${hired}` };
   });
-  const [job, setJob] = useState(jobLabels[0] || null);
+  const jobIds = jobOptions.map((o) => o.value);
+  const [job, setJob] = useState(jobIds[0] || null);
   const [sel, setSel] = useState([]);
   const [msg, setMsg] = useState(null);
   const [fireOpen, setFireOpen] = useState(false);
   useEffect(() => {
-    if (!job || !jobLabels.includes(job)) setJob(jobLabels[0] || null);
+    if (!job || !jobIds.includes(job)) setJob(jobIds[0] || null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobLabels.join("|")]);
+  }, [jobIds.join("|")]);
 
   const act = async (op) => {
     setMsg(null);
     if (!job) return setMsg(["warning", "먼저 직업을 선택하세요."]);
     if (!sel.length) return setMsg(["warning", "대상 학생을 선택하세요."]);
-    const jobId = data.rows[jobLabels.indexOf(job)]?._id;
-    const r = await api("job_assign", { job_id: jobId, op, sids: sel.map((l) => labelToId[l]).filter(Boolean) });
+    const r = await api("job_assign", { job_id: job, op, sids: sel.map((l) => labelToId[l]).filter(Boolean) });
     if (!r.ok) return setMsg(["error", r.error]);
     if (op === "hire") {
       if (r.changed) {
@@ -365,7 +366,7 @@ function JobAssign({ data, reload }) {
     <>
       <H3>🎖️ 직업 지정 / 회수</H3>
       <Cols w={[2, 2.6, 0.8, 0.8]} va="bottom">
-        {jobLabels.length ? <Select label="부여할 직업 선택" value={job} options={jobLabels} onChange={setJob} /> : <span />}
+        {jobOptions.length ? <Select label="부여할 직업 선택" value={job} options={jobOptions} onChange={setJob} /> : <span />}
         <MultiSelect label="대상 학생 선택(복수 선택 가능)" value={sel} options={accOptions} onChange={setSel} />
         <Btn onClick={() => act("hire")}>➕ 고용</Btn>
         <Btn onClick={() => setFireOpen(true)}>➖ 해제</Btn>
@@ -432,9 +433,11 @@ function JobExcel({ data, reload }) {
       const { columns, rows } = await readExcel(fl);
       let cols = columns;
       let rs = rows;
-      if (!cols.includes("배정수") && cols.includes("학생 수")) {
-        cols = cols.map((c) => (c === "학생 수" ? "배정수" : c));
-        rs = rs.map((r) => ({ ...r, 배정수: r["학생 수"] }));
+      // '배정수' / '학생 수' 로 적힌 엑셀도 '배정 수'로 인식
+      const alias = ["배정수", "학생 수"].find((a) => cols.includes(a));
+      if (!cols.includes("배정 수") && alias) {
+        cols = cols.map((c) => (c === alias ? "배정 수" : c));
+        rs = rs.map((r) => ({ ...r, "배정 수": r[alias] }));
       }
       if (!COLS.every((c) => cols.includes(c))) return setMsgs(["엑셀 컬럼은 반드시: 순 | 직업 | 월급 | 배정 수 여야 합니다."]);
       const num = (v, d) => {

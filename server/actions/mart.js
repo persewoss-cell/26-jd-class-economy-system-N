@@ -146,7 +146,7 @@ export default {
     const claimed = await col(db, "mart_requests").updateIf(String(request_id), { status: "pending" }, { status: "approving" });
     if (!claimed) fail("이미 처리된 요청입니다.");
     try {
-      await adminTx(db, { sid, memo: `마트 구입(${item})`, withdraw: price, applyTreasury: true, treasuryMemo: `마트 구입 세입 ${name} ${item}`.trim(), actor: "mart", recorder: label });
+      await adminTx(db, { sid, memo: `마트 구입(${item})`, withdraw: price, applyTreasury: true, treasuryMemo: `마트 구입 세입 ${name} ${item}`.trim(), actor: "mart", recorder: label, requireBalance: true });
     } catch (e) {
       await col(db, "mart_requests").update(String(request_id), { status: "pending" });
       throw e;
@@ -158,7 +158,9 @@ export default {
 
   async mart_reject(ctx, { request_id }) {
     requireAny(ctx, MART_ADMIN);
-    await col(ctx.db, "mart_requests").set(String(request_id), { status: "rejected", rejected_at: new Date() }, true);
+    // 대기 중인 요청만 거절 (이미 승인된 것을 거절해 돈은 빠지고 기록만 바뀌는 일 방지)
+    const ok = await col(ctx.db, "mart_requests").updateIf(String(request_id), { status: "pending" }, { status: "rejected", rejected_at: new Date() });
+    if (!ok) fail("이미 처리된 요청입니다.");
     return {};
   },
 
