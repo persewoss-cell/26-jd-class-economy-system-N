@@ -2,83 +2,48 @@
 import React, { useMemo, useState } from "react";
 import { api } from "../lib/api.js";
 import { readExcel, downloadExcel } from "../lib/excel.js";
-import {
-  useApp, useLoad, Cols, H3, Subheader, Caption, Btn, TextInput, Select, NumberInput, Checkbox, Radio, SubTabs, ConfirmModal,
-  Info, Warning, ErrorBox, Success, DataTable, FileUpload, SectionDivider, Loading,
-} from "../components/ui.jsx";
+import { useApp, useLoad, Cols, H3, Subheader, Btn, TextInput, Select, NumberInput, Checkbox, Radio, SubTabs, ConfirmModal, Info, ErrorBox, Success, DataTable, SectionDivider, Loading, ExcelBar } from "../components/ui.jsx";
 import { TradeForm, useTradeForm, splitAmount, templateDisplay, TX_COLUMNS, txRowsView } from "../components/trade.jsx";
 
-// ---------------- 되돌리기(관리자) ----------------
-function RollbackPanel({ mode, selfRows, onDone }) {
+// ---------------- 되돌리기(관리자): 최근 입금/출금을 골라 기록째 지움 ----------------
+function UndoPanel({ onClose }) {
   const app = useApp();
+  const list = useLoad("undo_list", {}, [app.ver]);
+  const rows = (list.data && list.data.rows) || [];
+  const [key, setKey] = useState("");
   const [pin, setPin] = useState("");
-  const [pick, setPick] = useState("(선택)");
-  const [checked, setChecked] = useState({});
   const [err, setErr] = useState("");
-  const [warn, setWarn] = useState("");
-  const accounts = useLoad("accounts_list", {}, []);
-  const nameMap = useMemo(() => {
-    const m = {};
-    ((accounts.data && accounts.data.accounts) || []).forEach((a) => {
-      if (a.name) m[a.name] = a.student_id;
-    });
-    return m;
-  }, [accounts.data]);
-  const sid = mode === "admin" ? nameMap[pick] || "" : "";
-  const txs = useLoad("tx_list", { sid, limit: 120 }, [sid, mode === "admin" ? pick : "self"]);
-  const rows = mode === "admin" ? (sid ? (txs.data && txs.data.rows) || [] : []) : selfRows || [];
-  const view = rows.slice(0, 50);
-  const can = (r) => (mode === "admin" ? r.can_rollback_admin : r.can_rollback_user);
-
+  const pick = rows.find((r) => r.key === key) || rows[0];
   const run = async () => {
     setErr("");
-    setWarn("");
-    const ids = view.filter((r) => checked[r.tx_id] && can(r)).map((r) => r.tx_id);
-    if (!ids.length) {
-      const c = await api("check_admin_pin", { pin });
-      if (!c.valid) return setErr("관리자 PIN이 틀립니다.");
-      return setWarn("체크된 항목이 없어요.");
-    }
-    const r = await api("rollback", { admin_pin: pin, sid: mode === "admin" ? sid : undefined, tx_ids: ids });
+    if (!pick) return setErr("되돌릴 기록이 없어요.");
+    const r = await api("undo_apply", { admin_pin: pin, key: pick.key });
     if (r.ok) {
-      app.toast(`선택 ${r.undone}건 되돌림 완료`, "↩️");
-      setChecked({});
+      app.toast(`되돌리기 완료 (학생 ${r.students}명${r.treasury ? " · 국고 기록 포함" : ""})`, "↩️");
+      setPin("");
+      setKey("");
       app.refresh();
-      onDone && onDone();
-      if (mode === "admin") txs.reload();
     } else setErr(r.error || "되돌리기 실패");
   };
-
   return (
-    <>
-      <Subheader>{mode === "admin" ? "↩️ 선택 되돌리기(관리자)" : "↩️ 선택 되돌리기(관리자 전용)"}</Subheader>
-      <TextInput label="관리자 PIN 입력" type="password" value={pin} onChange={setPin} />
-      {mode === "admin" ? (
-        <Select label="되돌릴 학생 선택" value={pick} options={["(선택)", ...Object.keys(nameMap)]} onChange={(v) => { setPick(v); setChecked({}); }} />
+    <div className="undo-box">
+      <Subheader>↩️ 되돌리기(관리자)</Subheader>
+      {list.loading && !list.data ? <Loading /> : null}
+      {list.data && !rows.length ? <Info>되돌릴 수 있는 최근 입금/출금이 없어요.</Info> : null}
+      {rows.length ? (
+        <Cols w={[3.4, 1.4, 1.3, 0.8]} va="bottom">
+          <Select label="되돌릴 기록 (최근 순)" value={pick ? pick.key : ""} options={rows.map((r) => ({ value: r.key, label: r.label }))} onChange={setKey} />
+          <TextInput label="관리자 비밀번호" type="password" value={pin} onChange={setPin} onEnter={run} />
+          <Btn onClick={run}>↩️ 되돌리기</Btn>
+          <Btn onClick={onClose}>닫기</Btn>
+        </Cols>
       ) : null}
-      {mode === "self" && view.length === 0 ? <Info>거래 내역이 없어요.</Info> : null}
-      {mode === "self" && view.length > 0 ? <Caption>✅ 체크한 항목만 되돌립니다. (이미 되돌림/적금은 제외)</Caption> : null}
-      {(mode === "self" || pick !== "(선택)") && view.length > 0 ? (
-        <>
-          {view.map((r) => (
-            <Checkbox
-              key={r.tx_id}
-              label={`${r.created_at_kr} | ${r.memo} | +${r.deposit} / -${r.withdraw}`}
-              checked={!!checked[r.tx_id]}
-              disabled={!can(r)}
-              onChange={(v) => setChecked((c) => ({ ...c, [r.tx_id]: v }))}
-            />
-          ))}
-          <Btn onClick={run}>선택 항목 되돌리기</Btn>
-        </>
-      ) : null}
-      {warn ? <Warning>{warn}</Warning> : null}
       <ErrorBox>{err}</ErrorBox>
-    </>
+    </div>
   );
 }
 
-// ---------------- 템플릿 추가/수정/삭제 + 엑셀 ----------------
+// ---------------- 템플릿 ----------------
 const CATS = ["없음", "보상", "구입", "벌금"];
 function parseLabel(label) {
   const s = String(label || "").trim();
@@ -119,6 +84,7 @@ function TemplateManager({ templates, reload }) {
 
   const onMode = (m) => {
     setMode(m);
+    setErr("");
     if (m === "수정" && templates.length) {
       setPickIdx(0);
       fill(templates[0]);
@@ -217,69 +183,70 @@ function TemplateManager({ templates, reload }) {
     } else setBulkErr(`저장 실패: ${r.error}`);
   };
 
+  const opts = templates.map((t, i) => ({ value: i, label: templateDisplay(t) }));
   return (
     <>
       <SectionDivider />
       <H3>🧩 템플릿 추가/수정/삭제</H3>
-      <Radio label="작업" options={["추가", "수정"]} value={mode} onChange={onMode} />
-      {mode === "수정" && templates.length ? (
-        <Select
-          label="수정할 템플릿 선택"
-          value={pickIdx}
-          options={templates.map((t, i) => ({ value: i, label: templateDisplay(t) }))}
-          onChange={(i) => {
-            setPickIdx(i);
-            fill(templates[i]);
-          }}
-        />
-      ) : null}
-      <Cols w={[2, 1.2, 1, 1]}>
-        <TextInput label="내역 이름" value={form.base} onChange={(v) => setForm((f) => ({ ...f, base: v }))} />
-        <Select label="구분" value={form.cat} options={CATS} onChange={(v) => setForm((f) => ({ ...f, cat: v }))} />
-        <Select label="종류" value={form.kind} options={["입금", "출금"]} onChange={(v) => setForm((f) => ({ ...f, kind: v }))} />
-        <NumberInput label="금액" min={1} value={form.amount} onChange={(v) => setForm((f) => ({ ...f, amount: v }))} />
-      </Cols>
-      <NumberInput label="순서(order)" min={1} value={form.order} onChange={(v) => setForm((f) => ({ ...f, order: v }))} />
-      <Btn onClick={save}>저장(추가/수정)</Btn>
-      <ErrorBox>{err}</ErrorBox>
-      <Caption>삭제</Caption>
-      {templates.length ? (
+      <Radio label="작업" hideLabel options={["추가", "수정", "삭제"]} value={mode} onChange={onMode} />
+      {mode === "삭제" ? (
+        templates.length ? (
+          <Cols w={[3, 1]} va="bottom">
+            <Select label="삭제할 템플릿 선택" value={delIdx} options={opts} onChange={setDelIdx} />
+            <Btn onClick={() => setDelConfirm(true)}>🗑️ 삭제</Btn>
+          </Cols>
+        ) : (
+          <Info>삭제할 템플릿이 없어요.</Info>
+        )
+      ) : (
         <>
-          <Select label="삭제할 템플릿 선택" value={delIdx} options={templates.map((t, i) => ({ value: i, label: templateDisplay(t) }))} onChange={setDelIdx} />
-          <Btn onClick={() => setDelConfirm(true)}>삭제</Btn>
-          {delConfirm ? (
-            <>
-              <Warning>정말로 삭제하시겠습니까?</Warning>
-              <Cols w={2}>
-                <Btn onClick={del}>예</Btn>
-                <Btn onClick={() => setDelConfirm(false)}>아니오</Btn>
-              </Cols>
-            </>
+          {mode === "수정" && templates.length ? (
+            <Select
+              label="수정할 템플릿 선택"
+              value={pickIdx}
+              options={opts}
+              onChange={(i) => {
+                setPickIdx(i);
+                fill(templates[i]);
+              }}
+            />
           ) : null}
+          <Cols w={[3, 1.3, 1.1, 1.1, 0.9, 1.2]} va="bottom">
+            <TextInput label="내역 이름" value={form.base} onChange={(v) => setForm((f) => ({ ...f, base: v }))} />
+            <Select label="구분" value={form.cat} options={CATS} onChange={(v) => setForm((f) => ({ ...f, cat: v }))} />
+            <Select label="종류" value={form.kind} options={["입금", "출금"]} onChange={(v) => setForm((f) => ({ ...f, kind: v }))} />
+            <NumberInput label="금액" min={1} stepper={false} value={form.amount} onChange={(v) => setForm((f) => ({ ...f, amount: v }))} />
+            <NumberInput label="순서" min={1} stepper={false} value={form.order} onChange={(v) => setForm((f) => ({ ...f, order: v }))} />
+            <Btn onClick={save}>✅ 저장</Btn>
+          </Cols>
         </>
-      ) : null}
+      )}
+      <ErrorBox>{err}</ErrorBox>
+      <ConfirmModal open={delConfirm} title="🗑️ 템플릿 삭제" message={`'${templates[delIdx] ? templateDisplay(templates[delIdx]) : ""}' 템플릿을 삭제할까요?`} onYes={del} onNo={() => setDelConfirm(false)} />
 
       <H3>📥 템플릿 엑셀로 일괄 추가</H3>
-      <Cols w={2}>
-        <Btn className="dl" onClick={() => downloadExcel("템플릿_샘플.xlsx", [{ name: "templates", columns: COLS, rows: sample }])}>📄 샘플 엑셀 다운로드</Btn>
-        <Btn className="dl" onClick={() => downloadExcel("템플릿_현재목록.xlsx", [{ name: "templates", columns: COLS, rows: current }])}>📄 현재 템플릿 엑셀 다운로드</Btn>
-      </Cols>
-      <Caption>• 샘플 형식: 내역이름 | 구분(없음/보상/구입/벌금) | 종류(입금/출금) | 금액 | 순서</Caption>
-      <Caption>
-        • 엑셀을 올린 뒤, 아래의 <b>저장</b> 버튼을 눌러야 실제 반영됩니다.
-      </Caption>
-      <FileUpload label="엑셀 업로드(.xlsx)" file={file} onFile={onFile} help="샘플 형식 그대로 업로드하세요. 업로드만으로는 반영되지 않고, 아래 '저장' 버튼을 눌러야 반영됩니다." />
-      {bulkMsgs.map((m) => (
-        <ErrorBox key={m}>{m}</ErrorBox>
-      ))}
-      {bulk ? (
-        <>
-          <Success>업로드 완료! ({bulk.length}행) 아래 미리보기 확인 후 저장을 누르세요.</Success>
-          <DataTable rows={bulk} columns={COLS} />
-        </>
-      ) : null}
-      <Checkbox label="저장 시 기존 템플릿 리스트를 모두 삭제하고 새로 올린 엑셀로 덮어쓰기" checked={delOld} onChange={setDelOld} />
-      <Btn onClick={bulkSave}>✅ 엑셀 내용 저장(반영)</Btn>
+      <ExcelBar
+        downloads={[
+          ["📄 샘플 엑셀", () => downloadExcel("템플릿_샘플.xlsx", [{ name: "templates", columns: COLS, rows: sample }])],
+          ["📄 현재 템플릿 엑셀", () => downloadExcel("템플릿_현재목록.xlsx", [{ name: "templates", columns: COLS, rows: current }])],
+        ]}
+        file={file}
+        onFile={onFile}
+        overwrite={delOld}
+        setOverwrite={setDelOld}
+        overwriteLabel="기존 템플릿을 모두 지우고 엑셀로 덮어쓰기"
+        onSave={bulkSave}
+      >
+        {bulkMsgs.map((m) => (
+          <ErrorBox key={m}>{m}</ErrorBox>
+        ))}
+        {bulk ? (
+          <>
+            <Success>업로드 완료! ({bulk.length}행) 미리보기 확인 후 저장을 누르세요.</Success>
+            <DataTable rows={bulk} columns={COLS} />
+          </>
+        ) : null}
+      </ExcelBar>
       <ErrorBox>{bulkErr}</ErrorBox>
     </>
   );
@@ -311,6 +278,11 @@ export function BankAdmin() {
   const [bForm, setBForm, bReset] = useTradeForm(false);
   const [bErr, setBErr] = useState("");
   const [undo, setUndo] = useState(false);
+  const undoBtn = (
+    <Btn full={false} className="undo" onClick={() => setUndo((v) => !v)}>
+      ↩️ 되돌리기(관리자)
+    </Btn>
+  );
   const saveBulk = async (dir, treasury) => {
     setBErr("");
     const { memo } = bForm;
@@ -380,10 +352,9 @@ export function BankAdmin() {
       {sub === "전체" ? (
         <>
           <H3>🎁 전체 일괄 입금/출금</H3>
-          <TradeForm form={bForm} setForm={setBForm} templates={templates} onAction={(dir) => saveBulk(dir)} />
-          <Btn onClick={() => setUndo((v) => !v)}>되돌리기(관리자)</Btn>
+          <TradeForm form={bForm} setForm={setBForm} templates={templates} onAction={(dir) => saveBulk(dir)} extra={undoBtn} />
           <ErrorBox>{bErr}</ErrorBox>
-          {undo ? <RollbackPanel mode="admin" /> : null}
+          {undo ? <UndoPanel onClose={() => setUndo(false)} /> : null}
         </>
       ) : (
         <>
@@ -408,10 +379,10 @@ export function BankAdmin() {
                   )}
                 </Cols>
               ))}
-              {selected.length ? <Caption>선택됨: {selected.map((a) => a.name).join(" · ")}</Caption> : null}
               <H3>🎁 개인 입금/출금</H3>
-              <TradeForm form={pForm} setForm={setPForm} templates={templates} onAction={(dir) => savePersonal(dir)} />
+              <TradeForm form={pForm} setForm={setPForm} templates={templates} onAction={(dir) => savePersonal(dir)} extra={undoBtn} />
               <ErrorBox>{pErr}</ErrorBox>
+              {undo ? <UndoPanel onClose={() => setUndo(false)} /> : null}
             </>
           ) : null}
           <TemplateManager templates={templates} reload={tpls.reload} />
@@ -428,7 +399,6 @@ export function BankStudent() {
   const txs = useLoad("tx_list", { limit: 300 }, [app.ver]);
   const [form, setForm, reset] = useTradeForm();
   const [err, setErr] = useState("");
-  const [undo, setUndo] = useState(false);
   const rows = (txs.data && txs.data.rows) || [];
 
   const save = async (dir) => {
@@ -450,9 +420,7 @@ export function BankStudent() {
     <>
       <Subheader>📝 통장 입금/출금하기</Subheader>
       <TradeForm form={form} setForm={setForm} templates={(tpls.data && tpls.data.templates) || []} onAction={save} depositText="💰 입금 요청" />
-      <Btn onClick={() => setUndo((v) => !v)}>되돌리기(관리자)</Btn>
       <ErrorBox>{err}</ErrorBox>
-      {undo ? <RollbackPanel mode="self" selfRows={rows} onDone={() => setUndo(false)} /> : null}
       <Subheader>📒 통장 거래 내역(최신순)</Subheader>
       {txs.loading && !txs.data ? <Loading /> : rows.length ? <DataTable rows={txRowsView(rows)} columns={TX_COLUMNS} csvName="통장내역" /> : <Info>거래 내역이 없어요.</Info>}
     </>

@@ -2,10 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
 import { readExcel, downloadExcel } from "../lib/excel.js";
-import {
-  useApp, useLoad, Cols, H3, H4, Subheader, Caption, Btn, TextInput, Select, MultiSelect, NumberInput, Checkbox, Metric,
-  Info, Warning, ErrorBox, Success, Expander, DataTable, FileUpload, Loading,
-} from "../components/ui.jsx";
+import { useApp, useLoad, Cols, H3, H4, Subheader, Caption, Btn, TextInput, Select, MultiSelect, NumberInput, Checkbox, Metric, Info, Warning, ErrorBox, Success, Expander, DataTable, Loading, ConfirmModal, ExcelBar, TplEditor } from "../components/ui.jsx";
 
 function calcNet(gross, cfg) {
   gross = parseInt(gross, 10) || 0;
@@ -113,8 +110,8 @@ function PayrollBox({ data, reload }) {
 
   return (
     <Expander title="💸 월급 지급 설정">
-      <Cols w={[1.4, 1.2, 1.4]} va="center">
-        <NumberInput label="월급 지급 날짜 지정: 매월 (일)" min={1} max={31} value={day} onChange={setDay} />
+      <Cols w={[1, 0.7, 1, 2.5]} va="bottom">
+        <NumberInput label="월급 지급 날짜: 매월 (일)" min={1} max={31} value={day} onChange={setDay} />
         <Checkbox
           label="자동지급"
           checked={auto}
@@ -122,13 +119,12 @@ function PayrollBox({ data, reload }) {
           help={"해당 날짜부터 매월, 학생의 직업 실수령액 기준으로 자동 지급합니다.\n그날 아무도 접속을 안 해서 놓쳐도, 이번 달 안에 누군가 접속하면 그때 밀린 월급이 자동 지급됩니다.\n이미 이번 달에 수동지급을 했으면 자동지급은 그 달에는 패스됩니다."}
         />
         <Btn onClick={saveCfg}>✅ 지급 설정 저장</Btn>
+        <Btn onClick={() => (data.already_any ? setConfirm(true) : doPay(false))}>💸 수동지급(이번 달 즉시 지급, 기지급 시 확인 후 지급)</Btn>
       </Cols>
-      <Caption>• 수동지급: 이번 달(현재 월)에 즉시 지급합니다. 이미 지급한 기록이 있으면 확인 후 재지급합니다.</Caption>
-      <Btn onClick={() => (data.already_any ? setConfirm(true) : doPay(false))}>💸 수동지급(이번 달 즉시 지급)</Btn>
       {confirm ? (
         <>
           <Warning>이번 달에 이미 월급 지급(자동/수동)한 기록이 있습니다. 그래도 지급하시겠습니까?</Warning>
-          <TextInput label="관리자 비밀번호(PIN)" type="password" value={pin} onChange={setPin} help="이미 지급된 달에 재지급하려면 관리자 PIN 확인이 필요합니다." />
+          <TextInput label="관리자 비밀번호(PIN)" type="password" value={pin} onChange={setPin} />
           <Cols w={2}>
             <Btn onClick={() => doPay(true)}>예</Btn>
             <Btn
@@ -257,89 +253,45 @@ function JobAssign({ data, reload }) {
   return (
     <>
       <H3>🎖️ 직업 지정 / 회수</H3>
-      <Caption>직업을 선택한 뒤, 학생을 선택하고 ‘고용/해제’ 버튼을 누르세요.</Caption>
-      <Cols w={[1.2, 2.0]}>
+      <Cols w={[1.8, 2.1, 0.8, 0.8, 1.5]} va="bottom">
         {jobLabels.length ? <Select label="부여할 직업 선택" value={job} options={jobLabels} onChange={setJob} /> : <span />}
         <MultiSelect label="대상 학생 선택(복수 선택 가능)" value={sel} options={accOptions} onChange={setSel} />
-      </Cols>
-      <Cols w={[1, 1]}>
         <Btn onClick={() => act("hire")}>➕ 고용</Btn>
         <Btn onClick={() => act("fire")}>➖ 해제</Btn>
+        <Btn onClick={() => setClearChk(true)}>🔥 전체 직업 해제</Btn>
       </Cols>
       {msg ? msg[0] === "warning" ? <Warning>{msg[1]}</Warning> : msg[0] === "info" ? <Info>{msg[1]}</Info> : <ErrorBox>{msg[1]}</ErrorBox> : null}
-      <Cols w={[1.0, 2.0]} va="center">
-        <Checkbox label="전체 직업 해제" checked={clearChk} onChange={setClearChk} />
-        <Btn onClick={clearAll} disabled={!clearChk}>
-          🔥 전체 직업 해제
-        </Btn>
-      </Cols>
+      <ConfirmModal open={clearChk} title="⚠️ 전체 직업 해제" message="모든 학생의 직업을 해제할까요? 되돌릴 수 없어요." onYes={() => { setClearChk(false); clearAll(); }} onNo={() => setClearChk(false)} />
     </>
   );
 }
 
 function JobEdit({ data, reload }) {
-  const app = useApp();
-  const labels = ["(새로 추가)", ...data.rows.map((r) => `${r.order} | ${r.job} (월급 ${r.salary})`)];
-  const [pick, setPick] = useState("(새로 추가)");
-  const [f, setF] = useState({ job: "", salary: 0, count: 1 });
-  const [err, setErr] = useState("");
-  const [delId, setDelId] = useState(null);
-  const editRow = pick === "(새로 추가)" ? null : data.rows[labels.indexOf(pick) - 1] || null;
-  const onPick = (v) => {
-    setPick(v);
-    const r = v === "(새로 추가)" ? null : data.rows[labels.indexOf(v) - 1];
-    setF(r ? { job: r.job, salary: r.salary, count: r.student_count } : { job: "", salary: 0, count: 1 });
-  };
-  const reset = () => {
-    setPick("(새로 추가)");
-    setF({ job: "", salary: 0, count: 1 });
-  };
-  const save = async () => {
-    setErr("");
-    if (!f.job.trim()) return setErr("직업을 입력해 주세요.");
-    const r = await api("job_save", { job_id: editRow ? editRow._id : "", job: f.job.trim(), salary: f.salary, student_count: f.count });
-    if (r.ok) {
-      app.toast(r.result === "updated" ? "수정 완료!" : "추가 완료!", "✅");
-      reset();
-      reload();
-    } else setErr(r.error);
-  };
-  const del = async () => {
-    const r = await api("job_delete", { job_id: delId });
-    setDelId(null);
-    if (r.ok) {
-      app.toast("삭제 완료", "🗑️");
-      reset();
-      reload();
-    }
-  };
   return (
     <>
-      <H3>➕ 직업 추가 / 수정</H3>
-      <Select label="편집 대상" value={pick} options={labels} onChange={onPick} />
-      <Cols w={[2, 1.2, 1.2, 1]} va="bottom">
-        <TextInput label="직업" value={f.job} onChange={(v) => setF((x) => ({ ...x, job: v }))} />
-        <NumberInput label="월급" min={0} value={f.salary} onChange={(v) => setF((x) => ({ ...x, salary: v }))} />
-        <NumberInput label="학생 수(최소 1)" min={1} value={f.count} onChange={(v) => setF((x) => ({ ...x, count: v }))} />
-        <Metric label="실수령액(자동)" value={calcNet(f.salary, data.cfg)} />
-      </Cols>
-      <Cols w={[1, 1, 1]}>
-        <Btn onClick={save}>✅ 저장</Btn>
-        <span />
-        <Btn onClick={() => editRow && setDelId(editRow._id)} disabled={!editRow}>
-          🗑️ 삭제
-        </Btn>
-      </Cols>
-      <ErrorBox>{err}</ErrorBox>
-      {delId ? (
-        <>
-          <Warning>정말 삭제하시겠습니까?</Warning>
-          <Cols w={2}>
-            <Btn onClick={del}>예</Btn>
-            <Btn onClick={() => setDelId(null)}>아니오</Btn>
-          </Cols>
-        </>
-      ) : null}
+      <H3>➕ 직업 추가 / 수정 / 삭제</H3>
+      <TplEditor
+        noun="직업"
+        items={data.rows}
+        itemLabel={(r) => `${r.order} | ${r.job} (월급 ${r.salary})`}
+        blank={() => ({ job: "", salary: 0, count: 1 })}
+        fromItem={(r) => ({ job: r.job, salary: r.salary, count: r.student_count })}
+        widths={[2.4, 1.1, 1.1, 1.2]}
+        fields={(f, set) => [
+          <TextInput key="j" label="직업" value={f.job} onChange={(v) => set({ job: v })} />,
+          <NumberInput key="s" label="월급" min={0} stepper={false} value={f.salary} onChange={(v) => set({ salary: v })} />,
+          <NumberInput key="c" label="학생 수(최소 1)" min={1} stepper={false} value={f.count} onChange={(v) => set({ count: v })} />,
+          <Metric key="n" label="실수령액(자동)" value={calcNet(f.salary, data.cfg)} />,
+        ]}
+        onSave={async (f, edit) => {
+          if (!f.job.trim()) return { ok: false, error: "직업을 입력해 주세요." };
+          return api("job_save", { job_id: edit ? edit._id : "", job: f.job.trim(), salary: f.salary, student_count: f.count });
+        }}
+        onDelete={(r) => api("job_delete", { job_id: r._id })}
+        saveToast="저장 완료!"
+        deleteToast="삭제 완료"
+        reload={reload}
+      />
     </>
   );
 }
@@ -397,23 +349,25 @@ function JobExcel({ data, reload }) {
   return (
     <>
       <H3>📥 직업 엑셀 일괄 업로드</H3>
-      <Caption>엑셀 업로드 후 미리보기 확인 → '저장(반영)'을 눌러야 실제 반영됩니다.</Caption>
-      <Cols w={2}>
-        <Btn className="dl" onClick={() => downloadExcel("jobs_sample.xlsx", [{ name: "jobs", columns: COLS, rows: [{ 순: 1, 직업: "은행원", 월급: 500, "배정 수": 1 }, { 순: 2, 직업: "통계청", 월급: 300, "배정 수": 2 }] }])}>
-          📄 직업 샘플 엑셀 다운로드
-        </Btn>
-        <Btn className="dl" onClick={() => downloadExcel("jobs_current.xlsx", [{ name: "jobs", columns: COLS, rows: current }])}>
-          📄 현재 템플릿 엑셀 다운로드
-        </Btn>
-      </Cols>
-      <Checkbox label="⚠️ 저장 시 기존 직업 목록 전체 삭제(덮어쓰기)" checked={wipe} onChange={setWipe} />
-      <FileUpload label="📤 직업 엑셀 업로드(xlsx)" file={file} onFile={onFile} />
-      {msgs.map((m) => (
-        <ErrorBox key={m}>{m}</ErrorBox>
-      ))}
-      {preview ? <Success>{`미리보기 준비 완료! (${preview.length}행) 아래에서 저장(반영)을 누르세요.`}</Success> : null}
-      {preview && preview.length ? <DataTable rows={preview} columns={COLS} /> : null}
-      <Btn onClick={save}>✅ 저장(반영)</Btn>
+      <ExcelBar
+        downloads={[
+          ["📄 샘플 엑셀", () => downloadExcel("jobs_sample.xlsx", [{ name: "jobs", columns: COLS, rows: [{ 순: 1, 직업: "은행원", 월급: 500, "배정 수": 1 }, { 순: 2, 직업: "통계청", 월급: 300, "배정 수": 2 }] }])],
+          ["📄 현재 직업 엑셀", () => downloadExcel("jobs_current.xlsx", [{ name: "jobs", columns: COLS, rows: current }])],
+        ]}
+        file={file}
+        onFile={onFile}
+        overwrite={wipe}
+        setOverwrite={setWipe}
+        overwriteLabel="⚠️ 기존 직업 목록을 모두 지우고 엑셀로 덮어쓰기"
+        onSave={save}
+        saveText="✅ 저장(반영)"
+      >
+        {msgs.map((m) => (
+          <ErrorBox key={m}>{m}</ErrorBox>
+        ))}
+        {preview ? <Success>{`미리보기 준비 완료! (${preview.length}행) 저장(반영)을 누르세요.`}</Success> : null}
+        {preview && preview.length ? <DataTable rows={preview} columns={COLS} /> : null}
+      </ExcelBar>
       <ErrorBox>{err}</ErrorBox>
     </>
   );

@@ -34,7 +34,7 @@ export async function insertTx(db, { sid, type, amount, balanceAfter, memo, reco
 }
 
 // 국고 반영(+세입 / -세출). memo가 없거나 0이면 아무것도 안 함 (_treasury_apply_in_transaction)
-export async function treasuryApply(db, { memo, signed, actor, recorder }) {
+export async function treasuryApply(db, { memo, signed, actor, recorder, extra = {} }) {
   memo = str(memo).trim();
   signed = toInt(signed);
   if (!signed || !memo) return null;
@@ -53,6 +53,7 @@ export async function treasuryApply(db, { memo, signed, actor, recorder }) {
     memo,
     actor: str(actor),
     recorder: str(recorder),
+    ...extra,
     created_at: new Date(),
   });
   return newBal;
@@ -70,7 +71,7 @@ export async function treasuryTx(db, { memo, income, expense, actor = "treasury"
 }
 
 // 관리자(또는 권한 학생)의 개별 입금/출금 (+선택 국고 반영). 출금은 잔액 부족이어도 허용
-export async function adminTx(db, { sid, memo, deposit = 0, withdraw = 0, applyTreasury = false, treasuryMemo = "", actor = "admin_auto", recorder }) {
+export async function adminTx(db, { sid, memo, deposit = 0, withdraw = 0, applyTreasury = false, treasuryMemo = "", actor = "admin_auto", recorder, extra = {} }) {
   memo = str(memo).trim();
   deposit = toInt(deposit);
   withdraw = toInt(withdraw);
@@ -83,11 +84,11 @@ export async function adminTx(db, { sid, memo, deposit = 0, withdraw = 0, applyT
   const type = deposit > 0 ? "deposit" : "withdraw";
   if (applyTreasury) {
     const treSigned = type === "withdraw" ? withdraw : -deposit;
-    await treasuryApply(db, { memo: str(treasuryMemo) || memo, signed: treSigned, actor: str(actor) || "auto", recorder });
+    await treasuryApply(db, { memo: str(treasuryMemo) || memo, signed: treSigned, actor: str(actor) || "auto", recorder, extra });
   }
   const doc = await applyBalance(db, sid, amount);
   const newBal = toInt(doc && doc.balance);
-  const txId = await insertTx(db, { sid, type, amount, balanceAfter: newBal, memo, recorder });
+  const txId = await insertTx(db, { sid, type, amount, balanceAfter: newBal, memo, recorder, extra });
   return { balance: newBal, tx_id: txId };
 }
 

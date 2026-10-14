@@ -422,3 +422,31 @@ table.ledger { border-collapse: separate; border-spacing: 0; font-size: 0.92rem;
 .modal-btns .btn { min-height: 3rem; font-size: 1.05rem; }
 @keyframes mfade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes mpop { from { transform: scale(0.94); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* ---------- 입금/출금 폼: 2줄 3칸 (위아래 칸 폭이 맞음) ---------- */
+.trade-grid { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(0, 2.3fr) auto; gap: 0.75rem 0.8rem; align-items: end; flex: 1 1 100%; }
+.trade-grid .tg-check { display: flex; align-items: center; min-height: 2.7rem; }
+.trade-grid .tg-actions { display: flex; gap: 0.5rem; }
+.trade-grid .round-btns { flex-wrap: nowrap; gap: 0.35rem; }
+.trade-grid .round-btns .rb { flex: 1 1 0; min-width: 0; height: 2.7rem; padding: 0; border-radius: 12px; font-size: 0.85rem; }
+.trade-grid .round-btns .rb.clear { flex: 1.25 1 0; padding: 0; }
+.trade-grid .btn.act { min-height: 2.7rem; padding: 0 1.1rem; font-size: 1rem; border-radius: 12px; white-space: nowrap; }
+.trade-grid .btn.undo { min-height: 2.7rem; white-space: nowrap; }
+@media (max-width: 900px) {
+  .trade-grid { grid-template-columns: 1fr 1fr; }
+  .trade-grid .tg-actions, .trade-grid .round-btns { grid-column: 1 / -1; }
+}
+
+/* 엑셀 일괄 추가 한 덩어리 */
+.excel-bar { display: flex; flex-direction: column; gap: 0.6rem; flex: 1 1 100%; background: var(--field); border-radius: var(--radius); padding: 0.8rem; }
+.excel-bar .xb-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
+.excel-bar .xb-file { flex: 1 1 280px; min-width: 0; }
+.excel-bar .uploader { background: #fff; padding: 0.4rem 0.6rem; border-width: 1.5px; }
+.excel-bar .uploader .btn { min-height: 2.2rem; }
+.excel-bar .xb-row .check { flex: 1 1 auto; }
+
+.undo-box { flex: 1 1 100%; background: var(--out-l); border: 1px solid #ffd6da; border-radius: var(--radius); padding: 0.4rem 1rem 1rem; display: flex; flex-direction: column; gap: 0.6rem; }
+.cols .btn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cols .btn.full { padding-left: 0.6rem; padding-right: 0.6rem; }
+.undo-box .btn.tone-danger { background: var(--out); color: #fff; }
+.undo-box .btn.tone-danger:hover:not(:disabled) { background: #f0606c; }

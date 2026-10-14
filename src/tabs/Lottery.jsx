@@ -263,9 +263,7 @@ function LotteryUser() {
       ) : (
         <>
           <div className="md">{`🔔 ${o.round_no}회차 | 복권 가격 ${pad(o.ticket_price)}`}</div>
-          <Caption>※ 한 게임(한 줄)에는 4개의 숫자를 입력해야 합니다.</Caption>
-          <Caption>※ 각 칸에는 1~20 사이의 숫자만 입력할 수 있으며, 한 줄 안에서는 숫자가 중복될 수 없습니다.</Caption>
-          <Caption>※ 구매할 게임 수만큼 숫자를 입력한 후, 구매 버튼을 눌러주세요.</Caption>
+          <Caption>※ 한 줄에 1~20 숫자 4개를 중복 없이 입력하고 구매 버튼을 누르세요.</Caption>
           {games.map((g, gi) => (
             <Cols w={[0.8, 1, 1, 1, 1]} va="center" key={gi}>
               <b>{gi + 1}게임:</b>

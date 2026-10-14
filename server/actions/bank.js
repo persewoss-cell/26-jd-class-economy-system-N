@@ -1,11 +1,11 @@
 // 🏦 내 통장(💰입금/출금) : 일괄/개인 입출금, 템플릿, 되돌리기, 학생 거래, 입금 승인
-import { col } from "../db.js";
+import { col, newId } from "../db.js";
 import { fail, requireLogin, requireAny, requireStudent, isAdminPin, adminRecorder } from "../auth.js";
 import {
   adminTx, studentTx, treasuryApply, applyBalance, insertTx, getTxRows, isSavingsMemo, isInvestMemo,
   listAccounts, activeStudents,
 } from "../core.js";
-import { str, toInt, ior, toDate, fmtMmDd, fmtMd } from "../../shared/format.js";
+import { str, toInt, ior, toDate, fmtMmDd, fmtMd, fmtKrDatetimeNoYear } from "../../shared/format.js";
 
 const BANK_ADMIN = ["admin::🏦 내 통장"];
 const SAV_ADMIN = ["admin::🏦 은행(적금)"];
@@ -159,7 +159,119 @@ async function rejectDeposit(db, rid) {
   return true;
 }
 
+
+// ---------------- 되돌리기(입금/출금 탭에서 처리한 것만, 기록 자체를 지움) ----------------
+// 이번 업데이트 전 기록은 묶음 정보가 없어 학생별 한 줄로 보여줌
+const UNDO_LEGACY_BEFORE = new Date("2026-10-15T00:00:00+09:00");
+const SYSTEM_MEMO = /^(월급 |복권|\[경매|경매|마트|적금|투자|만기)|되돌리기|자동중복정정|전체회수/;
+const escRe = (x) => String(x).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+function isLegacyAdminTx(tx) {
+  if (tx.batch_id || tx.related_tx) return false;
+  if (!["deposit", "withdraw"].includes(str(tx.type))) return false;
+  if (!str(tx.recorder).startsWith("관리자")) return false;
+  const t = toDate(tx.created_at);
+  if (!t || t >= UNDO_LEGACY_BEFORE) return false;
+  const memo = str(tx.memo);
+  return !(SYSTEM_MEMO.test(memo) || isSavingsMemo(memo) || isInvestMemo(memo));
+}
+
+// 지운 기록 뒤에 쌓인 "총액(잔액)" 값을 지운 금액만큼 당겨서 내역이 어긋나지 않게
+async function removeTx(db, tx) {
+  const r = await db.collection("transactions").deleteOne({ _id: String(tx._id) });
+  if (!r.deletedCount) return false;
+  const amount = toInt(tx.amount);
+  await applyBalance(db, tx.student_id, -amount);
+  await db.collection("transactions").updateMany({ student_id: str(tx.student_id), created_at: { $gt: tx.created_at } }, { $inc: { balance_after: -amount } });
+  return true;
+}
+async function removeTreasuryEntry(db, led) {
+  const r = await db.collection("treasury_ledger").deleteOne({ _id: led._id });
+  if (!r.deletedCount) return false;
+  const signed = toInt(led.amount);
+  await db.collection("treasury").updateOne({ _id: "state" }, { $inc: { balance: -signed }, $set: { updated_at: new Date() } }, { upsert: true });
+  await db.collection("treasury_ledger").updateMany({ created_at: { $gt: led.created_at } }, { $inc: { balance_after: -signed } });
+  return true;
+}
+// 예전 기록: 같은 시각(±10초)·같은 금액·같은 내역으로 남은 국고 기록을 찾아 함께 지움
+async function findLegacyTreasury(db, tx) {
+  const t = toDate(tx.created_at);
+  if (!t) return null;
+  return await db.collection("treasury_ledger").findOne({
+    created_at: { $gte: new Date(t.getTime() - 10000), $lte: new Date(t.getTime() + 3000) },
+    amount: -toInt(tx.amount),
+    memo: { $regex: `${escRe(str(tx.memo).trim())}$` },
+    batch_id: { $exists: false },
+  });
+}
+
 export default {
+  // 되돌리기 드롭다운: 최근 처리한 입금/출금(최신순)
+  async undo_list(ctx) {
+    requireAny(ctx, BANK_ADMIN);
+    const db = ctx.db;
+    const [txs, studs] = await Promise.all([
+      db.collection("transactions").find({ type: { $in: ["deposit", "withdraw"] } }).sort({ created_at: -1 }).limit(600).toArray(),
+      db.collection("students").find({}, { projection: { name: 1, no: 1 } }).toArray(),
+    ]);
+    const nm = Object.fromEntries(studs.map((x) => [String(x._id), { name: str(x.name), no: toInt(x.no) }]));
+    const who = (sid) => (nm[sid] ? `${nm[sid].no > 0 ? `${nm[sid].no}번 ` : ""}${nm[sid].name}` : "(삭제된 학생)");
+    const groups = new Map();
+    const items = [];
+    for (const tx of txs) {
+      if (tx.batch_id && tx.source === "bank_admin") {
+        let g = groups.get(tx.batch_id);
+        if (!g) {
+          g = { key: `b:${tx.batch_id}`, t: toDate(tx.created_at), memo: str(tx.memo), amount: toInt(tx.amount), kind: str(tx.batch_kind), sids: [] };
+          groups.set(tx.batch_id, g);
+          items.push(g);
+        }
+        g.sids.push(str(tx.student_id));
+      } else if (isLegacyAdminTx(tx)) {
+        items.push({ key: `t:${tx._id}`, t: toDate(tx.created_at), memo: str(tx.memo), amount: toInt(tx.amount), kind: "legacy", sids: [str(tx.student_id)] });
+      }
+      if (items.length >= 40) break;
+    }
+    const batchIds = items.filter((x) => x.key.startsWith("b:")).map((x) => x.key.slice(2));
+    const treBatches = new Set((await db.collection("treasury_ledger").find({ batch_id: { $in: batchIds } }, { projection: { batch_id: 1 } }).toArray()).map((x) => x.batch_id));
+    const rows = items.map((x) => {
+      const target = x.kind === "bulk" ? `전체 ${x.sids.length}명` : x.sids.length > 1 ? `${who(x.sids[0])} 외 ${x.sids.length - 1}명` : who(x.sids[0]);
+      const money = x.amount >= 0 ? `입금 ${x.amount}` : `출금 ${-x.amount}`;
+      const tre = x.key.startsWith("b:") && treBatches.has(x.key.slice(2)) ? " · 국고 반영" : "";
+      return { key: x.key, label: `${x.t ? fmtKrDatetimeNoYear(x.t) : ""} | ${target} | ${x.memo} | ${money}${tre}` };
+    });
+    return { rows };
+  },
+
+  // 되돌리기 실행: 학생 기록·국고 기록을 지우고 잔액을 원래대로 (관리자 비밀번호 필요)
+  async undo_apply(ctx, { admin_pin, key }) {
+    requireAny(ctx, BANK_ADMIN);
+    if (!isAdminPin(admin_pin)) fail("관리자 비밀번호가 틀립니다.");
+    const db = ctx.db;
+    key = str(key);
+    let txs = [];
+    let leds = [];
+    if (key.startsWith("b:")) {
+      const bid = key.slice(2);
+      txs = await db.collection("transactions").find({ batch_id: bid, source: "bank_admin" }).toArray();
+      leds = await db.collection("treasury_ledger").find({ batch_id: bid }).toArray();
+    } else if (key.startsWith("t:")) {
+      const tx = await db.collection("transactions").findOne({ _id: key.slice(2) });
+      if (tx && isLegacyAdminTx(tx)) {
+        txs = [tx];
+        const led = await findLegacyTreasury(db, tx);
+        if (led) leds = [led];
+      }
+    }
+    if (!txs.length) fail("이미 되돌렸거나 되돌릴 수 없는 기록이에요.");
+    let n = 0;
+    for (const tx of txs) if (await removeTx(db, tx)) n += 1;
+    if (!n) fail("이미 되돌린 기록이에요.");
+    let t = 0;
+    for (const led of leds) if (await removeTreasuryEntry(db, led)) t += 1;
+    return { students: n, treasury: t };
+  },
+
   async templates_list(ctx) {
     requireLogin(ctx);
     return { templates: await listTemplates(ctx.db) };
@@ -201,15 +313,17 @@ export default {
     const amount = dep > 0 ? dep : wd;
     const signed = dep > 0 ? amount : -amount;
     const studs = await db.collection("students").find({ is_active: true }, { projection: { _id: 1 } }).toArray();
+    // 한 번에 처리한 묶음 표시 → 되돌리기 때 학생 기록 + 국고 기록을 한꺼번에 지움
+    const extra = { batch_id: newId(), source: "bank_admin", batch_kind: "bulk" };
     await Promise.all(
       studs.map(async (s) => {
         const doc = await applyBalance(db, s._id, signed);
-        await insertTx(db, { sid: s._id, type: dep > 0 ? "deposit" : "withdraw", amount: signed, balanceAfter: toInt(doc && doc.balance), memo, recorder });
+        await insertTx(db, { sid: s._id, type: dep > 0 ? "deposit" : "withdraw", amount: signed, balanceAfter: toInt(doc && doc.balance), memo, recorder, extra });
       })
     );
     const count = studs.length;
     if (treasury && count > 0) {
-      await treasuryApply(db, { memo: `전체 ${memo}`.trim(), signed: dep > 0 ? -(dep * count) : wd * count, actor: "전체", recorder });
+      await treasuryApply(db, { memo: `전체 ${memo}`.trim(), signed: dep > 0 ? -(dep * count) : wd * count, actor: "전체", recorder, extra });
     }
     return { count, mode: dep > 0 ? "deposit" : "withdraw" };
   },
@@ -233,19 +347,21 @@ export default {
       disp[a.student_id] = no > 0 ? `${no}번 ${str(a.name)}` : str(a.name);
     }
     const recorder = adminRecorder(ctx);
+    const extra = { batch_id: newId(), source: "bank_admin", batch_kind: "personal" };
     let okCnt = 0;
     const fails = [];
-    await Promise.all(
-      sids.map(async (sid) => {
-        const d = disp[sid] || sid;
-        try {
-          await adminTx(db, { sid, memo, deposit: dep, withdraw: wd, applyTreasury: !!treasury, treasuryMemo: `${d} ${memo}`.trim(), actor: d, recorder });
-          okCnt += 1;
-        } catch (e) {
-          fails.push(e.userMessage || String(e.message || e));
-        }
-      })
-    );
+    const one = async (sid) => {
+      const d = disp[sid] || sid;
+      try {
+        await adminTx(db, { sid, memo, deposit: dep, withdraw: wd, applyTreasury: !!treasury, treasuryMemo: `${d} ${memo}`.trim(), actor: d, recorder, extra });
+        okCnt += 1;
+      } catch (e) {
+        fails.push(e.userMessage || String(e.message || e));
+      }
+    };
+    // 국고까지 바뀌는 경우는 국고 잔액이 꼬이지 않게 한 명씩, 아니면 동시에
+    if (treasury) for (const sid of sids) await one(sid);
+    else await Promise.all(sids.map(one));
     if (okCnt === 0) fail("적용 실패: " + (fails[0] || "알 수 없는 오류"));
     return { ok_cnt: okCnt, mode: isDeposit ? "deposit" : "withdraw" };
   },

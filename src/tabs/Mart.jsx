@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { api } from "../lib/api.js";
 import { readExcel, downloadExcel } from "../lib/excel.js";
-import { useApp, useLoad, Cols, H4, Caption, Btn, TextInput, Select, NumberInput, Checkbox, Info, Warning, ErrorBox, DataTable, FileUpload, Loading } from "../components/ui.jsx";
+import { useApp, useLoad, Cols, H4, Caption, Btn, TextInput, Select, NumberInput, Info, Warning, ErrorBox, DataTable, Loading, TplEditor, ExcelBar } from "../components/ui.jsx";
 
 export function MartUser() {
   const app = useApp();
@@ -51,50 +51,26 @@ export function MartUser() {
 }
 
 function MartTemplates({ templates, reload }) {
-  const app = useApp();
-  const labels = ["(새로 추가)", ...templates.map((t) => `${t.order} | ${t.item} | ${t.price}드림`)];
-  const [pick, setPick] = useState("(새로 추가)");
-  const blank = () => ({ item: "", price: 0, order: Math.max(1, templates.length + 1) });
-  const [f, setF] = useState(blank);
-  const [err, setErr] = useState("");
-  const edit = pick === "(새로 추가)" ? null : templates[labels.indexOf(pick) - 1] || null;
-  const onPick = (v) => {
-    setPick(v);
-    const t = v === "(새로 추가)" ? null : templates[labels.indexOf(v) - 1];
-    setF(t ? { item: t.item, price: t.price, order: t.order } : blank());
-  };
-  const save = async () => {
-    setErr("");
-    const r = await api("mart_tpl_save", { item: f.item.trim(), price: f.price, order: f.order, template_id: edit ? edit.template_id : "" });
-    if (r.ok) {
-      app.toast("템플릿 저장 완료", "✅");
-      reload();
-    } else setErr(r.error || "저장 실패");
-  };
-  const del = async () => {
-    if (!edit) return;
-    const r = await api("mart_tpl_delete", { template_id: edit.template_id });
-    if (r.ok) {
-      app.toast("삭제 완료", "✅");
-      reload();
-    } else setErr(r.error || "삭제 실패");
-  };
   return (
     <>
       <H4>🧩 마트 템플릿 추가/수정/삭제</H4>
-      <Select label="편집 대상" value={pick} options={labels} onChange={onPick} />
-      <Cols w={[3, 2, 1]}>
-        <TextInput label="내역" value={f.item} onChange={(v) => setF((x) => ({ ...x, item: v }))} />
-        <NumberInput label="금액" min={0} value={f.price} onChange={(v) => setF((x) => ({ ...x, price: v }))} />
-        <NumberInput label="순서" min={0} value={f.order} onChange={(v) => setF((x) => ({ ...x, order: v }))} />
-      </Cols>
-      <Cols w={2}>
-        <Btn onClick={save}>저장</Btn>
-        <Btn onClick={del} disabled={!edit}>
-          삭제
-        </Btn>
-      </Cols>
-      <ErrorBox>{err}</ErrorBox>
+      <TplEditor
+        items={templates}
+        itemLabel={(t) => `${t.order} | ${t.item} | ${t.price}드림`}
+        blank={() => ({ item: "", price: 0, order: Math.max(1, templates.length + 1) })}
+        fromItem={(t) => ({ item: t.item, price: t.price, order: t.order })}
+        widths={[3, 1.2, 0.9]}
+        fields={(f, set) => [
+          <TextInput key="i" label="내역" value={f.item} onChange={(v) => set({ item: v })} />,
+          <NumberInput key="p" label="금액" min={0} stepper={false} value={f.price} onChange={(v) => set({ price: v })} />,
+          <NumberInput key="o" label="순서" min={0} stepper={false} value={f.order} onChange={(v) => set({ order: v })} />,
+        ]}
+        onSave={(f, edit) => api("mart_tpl_save", { item: f.item.trim(), price: f.price, order: f.order, template_id: edit ? edit.template_id : "" })}
+        onDelete={(t) => api("mart_tpl_delete", { template_id: t.template_id })}
+        saveToast="템플릿 저장 완료"
+        deleteToast="삭제 완료"
+        reload={reload}
+      />
     </>
   );
 }
@@ -165,20 +141,23 @@ export function MartAdmin() {
       <ErrorBox>{err}</ErrorBox>
       <H4>📒 마트 구입 장부</H4>
       <DataTable rows={data.ledger} columns={["구입일시", "번호", "이름", "구입내역", "구입가격"]} csvName="마트장부" />
-      <MartTemplates key={data.templates.map((t) => `${t.template_id}:${t.order}:${t.price}:${t.item}`).join("|")} templates={data.templates} reload={reload} />
+      <MartTemplates templates={data.templates} reload={reload} />
       <H4>📥 마트 템플릿 엑셀로 일괄 추가</H4>
-      <Cols w={2}>
-        <Btn className="dl" onClick={() => downloadExcel("mart_template_sample.xlsx", [{ name: "mart_templates", columns: COLS, rows: [{ 내역: "초코파이", 금액: 60, 순서: 1 }] }])}>
-          마트 템플릿 샘플 엑셀 다운로드(형식: 내역 | 금액 | 순서)
-        </Btn>
-        <Btn className="dl" onClick={() => downloadExcel("mart_template_current.xlsx", [{ name: "mart_templates", columns: COLS, rows: data.templates.map((t) => ({ 내역: t.item.trim(), 금액: t.price, 순서: t.order })) }])}>
-          현재 템플릿 엑셀 다운로드
-        </Btn>
-      </Cols>
-      <FileUpload label="마트 템플릿 엑셀 업로드(.xlsx)" file={file} onFile={setFile} />
-      <Checkbox label="저장 시 기존 마트 템플릿 리스트를 모두 삭제하고 새로 올린 엑셀로 덮어쓰기" checked={overwrite} onChange={setOverwrite} />
-      <Btn onClick={applyExcel}>저장(반영)</Btn>
-      {xMsg ? xMsg[0] === "warning" ? <Warning>{xMsg[1]}</Warning> : <ErrorBox>{xMsg[1]}</ErrorBox> : null}
+      <ExcelBar
+        downloads={[
+          ["📄 샘플 엑셀", () => downloadExcel("mart_template_sample.xlsx", [{ name: "mart_templates", columns: COLS, rows: [{ 내역: "초코파이", 금액: 60, 순서: 1 }] }])],
+          ["📄 현재 템플릿 엑셀", () => downloadExcel("mart_template_current.xlsx", [{ name: "mart_templates", columns: COLS, rows: data.templates.map((t) => ({ 내역: t.item.trim(), 금액: t.price, 순서: t.order })) }])],
+        ]}
+        file={file}
+        onFile={setFile}
+        overwrite={overwrite}
+        setOverwrite={setOverwrite}
+        overwriteLabel="기존 마트 템플릿을 모두 지우고 엑셀로 덮어쓰기"
+        onSave={applyExcel}
+        saveText="✅ 저장(반영)"
+      >
+        {xMsg ? xMsg[0] === "warning" ? <Warning>{xMsg[1]}</Warning> : <ErrorBox>{xMsg[1]}</ErrorBox> : null}
+      </ExcelBar>
     </>
   );
 }

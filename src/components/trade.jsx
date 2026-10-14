@@ -1,6 +1,6 @@
 // 입금/출금 입력 폼(render_admin_trade_ui) + 국고 세입/세출 입력 폼(render_treasury_trade_ui)
 import React, { useState } from "react";
-import { Cols, Btn, TextInput, NumberInput, Select, Checkbox } from "./ui.jsx";
+import { Btn, TextInput, NumberInput, Select, Checkbox } from "./ui.jsx";
 
 const QUICK = [10, 20, 50, 100, 200, 500, 1000];
 
@@ -33,32 +33,35 @@ function RoundButtons({ onPick }) {
   );
 }
 
-// 금액 입력 + 방향 버튼 공용 폼
+// 금액 입력 + 방향 버튼 공용 폼 (2줄 · 3칸이 위아래로 맞춰짐)
+//   1줄: [내역 템플릿] [내역]          [국고 반영]
+//   2줄: [금액]       [+10 … 지우기] [입금] [출금] (+ 되돌리기 등 extra)
 // actions: [[방향("in"|"out"), 버튼 글자], [..]]  onAction(방향) 은 Promise 를 돌려주면 처리 중 버튼이 잠김
-function AmountForm({ form, setForm, tplLabel, tplOptions, onTpl, showTreasury, actions, onAction }) {
+function AmountForm({ form, setForm, tplLabel, tplOptions, onTpl, showTreasury, actions, onAction, extra }) {
   const onPick = (amt) => setForm((f) => ({ ...f, amount: amt === 0 ? 0 : (f.amount || 0) + amt }));
   return (
-    <>
+    <div className="trade-grid">
       <Select label={tplLabel} value={form.tpl} options={tplOptions} onChange={onTpl} />
       <TextInput label="내역" value={form.memo} onChange={(v) => setForm((f) => ({ ...f, memo: v }))} />
-      {showTreasury ? <Checkbox label="국고 반영" checked={form.treasury} onChange={(v) => setForm((f) => ({ ...f, treasury: v, treasuryTouched: true }))} /> : null}
-      <Cols w={[1, 1.5]} va="bottom">
-        <NumberInput label="금액" min={0} value={form.amount} onChange={(v) => setForm((f) => ({ ...f, amount: v }))} />
-        <RoundButtons onPick={onPick} />
-      </Cols>
-      <Cols w={2}>
+      <div className="tg-check">
+        {showTreasury ? <Checkbox label="국고 반영" checked={form.treasury} onChange={(v) => setForm((f) => ({ ...f, treasury: v, treasuryTouched: true }))} /> : null}
+      </div>
+      <NumberInput label="금액" min={0} value={form.amount} stepper={false} onChange={(v) => setForm((f) => ({ ...f, amount: v }))} />
+      <RoundButtons onPick={onPick} />
+      <div className="tg-actions">
         {actions.map(([dir, text]) => (
-          <Btn key={dir} className={`act act-${dir} ${form.hint === dir ? "hint" : ""}`} onClick={() => onAction(dir)}>
+          <Btn key={dir} full={false} className={`act act-${dir} ${form.hint === dir ? "hint" : ""}`} onClick={() => onAction(dir)}>
             {text}
           </Btn>
         ))}
-      </Cols>
-    </>
+        {extra || null}
+      </div>
+    </div>
   );
 }
 
 // 통장 입금/출금 (관리자 개인·전체, 학생 통장)
-export function TradeForm({ form, setForm, templates, onAction, depositText = "💰 입금" }) {
+export function TradeForm({ form, setForm, templates, onAction, depositText = "💰 입금", extra }) {
   const byDisp = {};
   (templates || []).forEach((t) => (byDisp[templateDisplay(t)] = t));
   const labels = ["(직접 입력)", ...(templates || []).map(templateDisplay)];
@@ -79,6 +82,7 @@ export function TradeForm({ form, setForm, templates, onAction, depositText = "�
       showTreasury
       actions={[["in", depositText], ["out", "💸 출금"]]}
       onAction={onAction}
+      extra={extra}
     />
   );
 }

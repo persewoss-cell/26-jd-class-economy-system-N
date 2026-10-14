@@ -179,7 +179,7 @@ export function TextInput({ label, value, onChange, type = "text", placeholder, 
 }
 
 // st.number_input (− / + 버튼 포함)
-export function NumberInput({ label, value, onChange, min = null, max = null, step = 1, decimals = 0, help, hideLabel, disabled }) {
+export function NumberInput({ label, value, onChange, min = null, max = null, step = 1, decimals = 0, help, hideLabel, disabled, stepper = true }) {
   const fmt = (v) => (v === "" || v === null || v === undefined ? "" : decimals ? Number(v).toFixed(decimals) : String(v));
   const [text, setText] = useState(fmt(value));
   const focused = useRef(false);
@@ -227,12 +227,16 @@ export function NumberInput({ label, value, onChange, min = null, max = null, st
             if (e.key === "Enter") e.target.blur();
           }}
         />
-        <button type="button" disabled={disabled} onClick={() => bump(-1)} aria-label="감소">
-          −
-        </button>
-        <button type="button" disabled={disabled} onClick={() => bump(1)} aria-label="증가">
-          +
-        </button>
+        {stepper ? (
+          <>
+            <button type="button" disabled={disabled} onClick={() => bump(-1)} aria-label="감소">
+              −
+            </button>
+            <button type="button" disabled={disabled} onClick={() => bump(1)} aria-label="증가">
+              +
+            </button>
+          </>
+        ) : null}
       </div>
     </div>
   );
@@ -513,11 +517,11 @@ export function DataTable({ rows, columns, small, tall, height, emptyText = null
 }
 
 // ---------------- 파일 업로드 / 다운로드 ----------------
-export function FileUpload({ label, file, onFile, help, accept = ".xlsx" }) {
+export function FileUpload({ label, file, onFile, help, accept = ".xlsx", hideLabel }) {
   const ref = useRef(null);
   return (
     <div className="field">
-      <Label label={label} help={help} />
+      <Label label={label} help={help} hidden={hideLabel} />
       <div className="uploader">
         <button type="button" className="btn" onClick={() => ref.current && ref.current.click()}>
           파일 선택
@@ -560,5 +564,103 @@ export function Toasts({ items }) {
         </div>
       ))}
     </div>
+  );
+}
+
+// 엑셀 일괄 추가 한 덩어리: [파일 선택 칸][샘플][현재] / [덮어쓰기 체크][저장]
+// downloads: [[버튼 글자, 클릭], ...]
+export function ExcelBar({ downloads = [], file, onFile, overwrite, setOverwrite, overwriteLabel, onSave, saveText = "✅ 엑셀 내용 저장(반영)", children }) {
+  return (
+    <div className="excel-bar">
+      <div className="xb-row">
+        <div className="xb-file">
+          <FileUpload label="엑셀 업로드" hideLabel file={file} onFile={onFile} />
+        </div>
+        {downloads.map(([text, fn]) => (
+          <Btn key={text} full={false} className="dl" onClick={fn}>
+            {text}
+          </Btn>
+        ))}
+      </div>
+      {children}
+      <div className="xb-row">
+        {setOverwrite ? <Checkbox label={overwriteLabel} checked={overwrite} onChange={setOverwrite} /> : null}
+        <Btn full={false} onClick={onSave}>
+          {saveText}
+        </Btn>
+      </div>
+    </div>
+  );
+}
+
+// 템플릿 편집 공용: [추가 | 수정 | 삭제]
+//  - 추가/수정: (수정이면 대상 선택) + 입력칸들과 [저장]이 한 줄
+//  - 삭제: 대상 선택 + [삭제] → 확인 팝업
+// fields(f, set) → 입력칸 배열, widths → 입력칸 폭 비율(저장 버튼 칸은 자동으로 붙음)
+export function TplEditor({ items, itemLabel, blank, fromItem, fields, widths, onSave, onDelete, saveToast = "템플릿 저장 완료!", deleteToast = "삭제 완료!", reload, noun = "템플릿" }) {
+  const app = useApp();
+  const [mode, setMode] = useState("추가");
+  const [idx, setIdx] = useState(0);
+  const [f, setF] = useState(blank);
+  const [err, setErr] = useState("");
+  const [confirm, setConfirm] = useState(false);
+  const cur = items[idx] || null;
+  const opts = items.map((t, i) => ({ value: i, label: itemLabel(t) }));
+  const set = (patch) => setF((x) => ({ ...x, ...patch }));
+  const onMode = (m) => {
+    setMode(m);
+    setErr("");
+    setIdx(0);
+    setF(m === "수정" && items[0] ? fromItem(items[0]) : blank());
+  };
+  const save = async () => {
+    setErr("");
+    const r = await onSave(f, mode === "수정" ? cur : null);
+    if (r.ok) {
+      app.toast(saveToast, "✅");
+      if (mode === "추가") setF(blank());
+      reload();
+    } else setErr(r.error || "저장 실패");
+  };
+  const del = async () => {
+    setConfirm(false);
+    if (!cur) return;
+    const r = await onDelete(cur);
+    if (r.ok) {
+      app.toast(deleteToast, "🗑️");
+      setIdx(0);
+      reload();
+    } else setErr(r.error || "삭제 실패");
+  };
+  return (
+    <>
+      <Radio label="작업" hideLabel options={["추가", "수정", "삭제"]} value={mode} onChange={onMode} />
+      {mode !== "추가" && !items.length ? <Info>{mode === "수정" ? "수정할" : "삭제할"} {noun}이 없어요.</Info> : null}
+      {mode === "삭제" && items.length ? (
+        <Cols w={[3, 1]} va="bottom">
+          <Select label={`삭제할 ${noun} 선택`} value={idx} options={opts} onChange={setIdx} />
+          <Btn onClick={() => setConfirm(true)}>🗑️ 삭제</Btn>
+        </Cols>
+      ) : null}
+      {mode === "수정" && items.length ? (
+        <Select
+          label={`수정할 ${noun} 선택`}
+          value={idx}
+          options={opts}
+          onChange={(i) => {
+            setIdx(i);
+            setF(fromItem(items[i]));
+          }}
+        />
+      ) : null}
+      {mode === "추가" || (mode === "수정" && items.length) ? (
+        <Cols w={[...widths, 1.1]} va="bottom">
+          {fields(f, set)}
+          <Btn onClick={save}>✅ 저장</Btn>
+        </Cols>
+      ) : null}
+      <ErrorBox>{err}</ErrorBox>
+      <ConfirmModal open={confirm} title={`🗑️ ${noun} 삭제`} message={`'${cur ? itemLabel(cur) : ""}' ${noun}을 삭제할까요?`} onYes={del} onNo={() => setConfirm(false)} />
+    </>
   );
 }

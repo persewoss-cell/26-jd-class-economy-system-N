@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { api } from "../lib/api.js";
 import { readExcel, downloadExcel } from "../lib/excel.js";
-import { useApp, useLoad, Cols, H3, Caption, Btn, Select, MultiSelect, Checkbox, Warning, ErrorBox, Success, DataTable, FileUpload, Loading } from "../components/ui.jsx";
+import { useApp, useLoad, Cols, H3, Btn, Select, MultiSelect, Warning, ErrorBox, Success, DataTable, Loading, ConfirmModal, ExcelBar } from "../components/ui.jsx";
 
 const ADMIN_OPTS = [
   ["💰입금/출금(관리자)", ["admin", "🏦 내 통장"]],
@@ -62,7 +62,7 @@ export default function Permissions() {
       const tabs = x.extra.filter((k) => k.startsWith("tab::")).map((k) => k.replace("tab::", ""));
       const adm = x.extra.filter((k) => k.startsWith("admin::")).map((k) => k.replace("admin::", "")).map((t) => ADMIN_DISP[t] || `${t}(관리자)`);
       if (!tabs.length && !adm.length) return null;
-      return { 번호: x.no, 이름: x.name, "추가 탭(tab::)": tabs.join(", "), "관리자 기능(admin::)": adm.join(", ") };
+      return { 번호: x.no, 이름: x.name, "부여된 권한": [...tabs, ...adm].join(", ") };
     })
     .filter(Boolean)
     .sort((a, b) => a.번호 - b.번호 || (a.이름 < b.이름 ? -1 : 1));
@@ -116,36 +116,34 @@ export default function Permissions() {
   return (
     <>
       <H3>🔐 학생별 관리자 탭 권한 부여/회수</H3>
-      <Caption>특정 학생에게 '관리자 탭' 또는 '관리자 기능(같은 탭 안)' 권한을 부여합니다. (👥 계정 정보 탭은 관리자 전용)</Caption>
-      <Cols w={[2, 3]}>
+      <Cols w={[2, 2.6, 1, 1, 1.3]} va="bottom">
         <Select label="부여할 항목 선택" value={opt} options={options.map((o) => o[0])} onChange={setOpt} />
         <MultiSelect label="대상 학생 선택(복수 선택 가능)" value={sel} options={Object.keys(byLabel)} onChange={setSel} />
-      </Cols>
-      <Cols w={[1, 1, 1, 2]} va="center">
         <Btn onClick={() => apply("grant")}>➕ 권한 부여</Btn>
         <Btn onClick={() => apply("revoke")}>➖ 권한 회수</Btn>
-        <Checkbox label="전체 권한 선택" checked={confirmAll} onChange={setConfirmAll} />
-        <Btn onClick={revokeAll} disabled={!confirmAll}>
-          🔥 전체 권한 회수
-        </Btn>
+        <Btn onClick={() => setConfirmAll(true)}>🔥 전체 권한 회수</Btn>
       </Cols>
       <Msg m={msg} />
+      <ConfirmModal open={confirmAll} title="⚠️ 전체 권한 회수" message="모든 학생에게 준 권한을 회수할까요?" onYes={() => { setConfirmAll(false); revokeAll(); }} onNo={() => setConfirmAll(false)} />
 
       <H3>📌 권한 부여 현황</H3>
-      <Caption>학생이 기존에 사용하던 유형의 탭(괄호 안 관리자 표기)은 관리자 기능 탭으로 구분됩니다.</Caption>
-      <DataTable rows={status} columns={PCOLS} csvName="권한현황" />
+      <DataTable rows={status} columns={["번호", "이름", "부여된 권한"]} csvName="권한현황" />
 
       <H3>📥 일괄 엑셀 권한 부여</H3>
-      <Caption>형식: 번호 | 이름 | 추가 탭(tab::) | 관리자 기능(admin::). 한 학생에게 여러 권한을 줄 때는 행을 여러 번 작성하세요.</Caption>
-      <Btn className="dl" onClick={sampleDownload}>
-        📄 샘플 엑셀 다운로드
-      </Btn>
-      <FileUpload label="📤 권한 엑셀 업로드(xlsx)" file={file} onFile={setFile} />
-      <Checkbox label="저장 시 기존 템플릿 리스트 삭제하고 새로 올린 엑셀로 덮어쓰기" checked={overwrite} onChange={setOverwrite} />
-      <Btn onClick={runBulk}>엑셀 일괄 등록 실행</Btn>
-      {(bulkMsg || []).map((m, i) => (
-        <Msg key={i} m={m} />
-      ))}
+      <ExcelBar
+        downloads={[["📄 샘플 엑셀", sampleDownload]]}
+        file={file}
+        onFile={setFile}
+        overwrite={overwrite}
+        setOverwrite={setOverwrite}
+        overwriteLabel="기존 권한을 모두 지우고 엑셀로 덮어쓰기"
+        onSave={runBulk}
+        saveText="✅ 엑셀 일괄 등록"
+      >
+        {(bulkMsg || []).map((m, i) => (
+          <Msg key={i} m={m} />
+        ))}
+      </ExcelBar>
     </>
   );
 }

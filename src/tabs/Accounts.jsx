@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
 import { readExcel, downloadExcel } from "../lib/excel.js";
-import { useApp, useLoad, Cols, H3, H4, Caption, Btn, Warning, ErrorBox, FileUpload, Loading } from "../components/ui.jsx";
+import { useApp, useLoad, Cols, H3, H4, Btn, Warning, ErrorBox, Loading, ExcelBar } from "../components/ui.jsx";
 
 export default function Accounts() {
   const app = useApp();
@@ -66,18 +66,18 @@ export default function Accounts() {
   return (
     <>
       <H3>📥 일괄 엑셀 계정 추가</H3>
-      <Caption>엑셀을 올리면 아래 리스트(계정/비번 관리 표)에 바로 반영됩니다.</Caption>
-      <Cols w={2}>
-        <Btn className="dl" onClick={() => downloadExcel("accounts_sample.xlsx", [{ name: "accounts", columns: COLS, rows: [{ 번호: 1, 이름: "홍길동", 비밀번호: "12a#" }, { 번호: 2, 이름: "김철수", 비밀번호: "ab@9" }] }])}>
-          📄 샘플 엑셀 다운로드
-        </Btn>
-        <Btn className="dl" onClick={() => downloadExcel("accounts_current.xlsx", [{ name: "accounts", columns: COLS, rows: current }])}>
-          📄 현재 계정 정보 엑셀 다운로드
-        </Btn>
-      </Cols>
-      <FileUpload label="📤 엑셀 업로드(xlsx)" file={file} onFile={setFile} />
-      <Btn onClick={runBulk}>엑셀 일괄 등록 실행</Btn>
-      {upMsg ? upMsg[0] === "warning" ? <Warning>{upMsg[1]}</Warning> : <ErrorBox>{upMsg[1]}</ErrorBox> : null}
+      <ExcelBar
+        downloads={[
+          ["📄 샘플 엑셀", () => downloadExcel("accounts_sample.xlsx", [{ name: "accounts", columns: COLS, rows: [{ 번호: 1, 이름: "홍길동", 비밀번호: "12a#" }, { 번호: 2, 이름: "김철수", 비밀번호: "ab@9" }] }])],
+          ["📄 현재 계정 정보 엑셀", () => downloadExcel("accounts_current.xlsx", [{ name: "accounts", columns: COLS, rows: current }])],
+        ]}
+        file={file}
+        onFile={setFile}
+        onSave={runBulk}
+        saveText="✅ 엑셀 일괄 등록"
+      >
+        {upMsg ? upMsg[0] === "warning" ? <Warning>{upMsg[1]}</Warning> : <ErrorBox>{upMsg[1]}</ErrorBox> : null}
+      </ExcelBar>
 
       <H4>👥 계정/비번 관리</H4>
       <Cols w={3}>

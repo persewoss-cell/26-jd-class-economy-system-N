@@ -1,7 +1,7 @@
 // (학생) 🎯 목표
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
-import { useApp, useLoad, Cols, Btn, NumberInput, DateInput, Progress, Info, Caption, ErrorBox, Loading } from "../components/ui.jsx";
+import { useApp, useLoad, Cols, Btn, NumberInput, DateInput, Progress, Info, ErrorBox, Loading } from "../components/ui.jsx";
 
 function kstToday() {
   const k = new Date(Date.now() + 9 * 3600 * 1000);
@@ -72,7 +72,6 @@ export default function Goal() {
         총 자산 기준 예상 달성률: <b>{(ratio * 100).toFixed(1)}%</b> (예상 {expected} / 목표 {amt})
       </div>
       {msg ? <Info>{msg}</Info> : null}
-      {principalAll === 0 && interestBefore === 0 ? <Caption>진행 중 적금이 없어 예상 금액은 통장 잔액과 같아요.</Caption> : null}
     </>
   );
 }

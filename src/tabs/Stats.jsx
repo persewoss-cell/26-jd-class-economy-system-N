@@ -1,7 +1,7 @@
 // 📊 통계청 (제출물 O/X/△ 관리) — 클릭은 화면에서만 바뀌고 [✅ 저장]을 눌러야 DB 반영
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
-import { useApp, useLoad, Cols, H3, Btn, TextInput, Select, NumberInput, Checkbox, Info, Warning, ErrorBox, SectionDivider, Loading } from "../components/ui.jsx";
+import { useApp, useLoad, Cols, H3, Btn, TextInput, Select, NumberInput, Checkbox, Info, Warning, ErrorBox, SectionDivider, Loading, TplEditor } from "../components/ui.jsx";
 
 export function OX({ value, onPick, disabled }) {
   return (
@@ -88,52 +88,26 @@ function AddSubmission({ templates, onAdded }) {
 }
 
 function StatTemplates({ templates, reload }) {
-  const app = useApp();
-  const labels = ["(새로 추가)", ...templates.map((t) => `${t.order} | ${t.label}`)];
-  const [pick, setPick] = useState("(새로 추가)");
-  const [f, setF] = useState({ label: "", order: 1 });
-  const [err, setErr] = useState("");
-  const edit = pick === "(새로 추가)" ? null : templates[labels.indexOf(pick) - 1] || null;
-  const onPick = (v) => {
-    setPick(v);
-    const t = v === "(새로 추가)" ? null : templates[labels.indexOf(v) - 1];
-    setF(t ? { label: t.label, order: t.order || 1 } : { label: "", order: 1 });
-  };
-  const save = async () => {
-    setErr("");
-    const r = await api("stat_tpl_save", { template_id: edit ? edit.template_id : "", label: f.label.trim(), order: f.order });
-    if (r.ok) {
-      app.toast("템플릿 저장 완료!", "✅");
-      onPick("(새로 추가)");
-      reload();
-    } else setErr(r.error || "저장 실패");
-  };
-  const del = async () => {
-    if (!edit) return;
-    const r = await api("stat_tpl_delete", { template_id: edit.template_id });
-    if (r.ok) {
-      app.toast("템플릿 삭제 완료!", "🗑️");
-      onPick("(새로 추가)");
-      reload();
-    } else setErr(r.error || "삭제 실패");
-  };
   return (
     <>
       <SectionDivider />
       <H3>🧩 통계표 템플릿 추가/수정/삭제</H3>
-      <Select label="편집 대상" value={pick} options={labels} onChange={onPick} />
-      <Cols w={[3.0, 1.0]}>
-        <TextInput label="템플릿 내역" value={f.label} onChange={(v) => setF((x) => ({ ...x, label: v }))} />
-        <NumberInput label="순서" min={1} value={f.order} onChange={(v) => setF((x) => ({ ...x, order: v }))} />
-      </Cols>
-      <Cols w={3}>
-        <Btn onClick={save}>✅ 저장</Btn>
-        <Btn onClick={() => onPick("(새로 추가)")}>🧹 입력 초기화</Btn>
-        <Btn onClick={del} disabled={!edit}>
-          🗑️ 삭제
-        </Btn>
-      </Cols>
-      <ErrorBox>{err}</ErrorBox>
+      <TplEditor
+        items={templates}
+        itemLabel={(t) => `${t.order} | ${t.label}`}
+        blank={() => ({ label: "", order: Math.max(1, templates.length + 1) })}
+        fromItem={(t) => ({ label: t.label, order: t.order || 1 })}
+        widths={[4, 0.9]}
+        fields={(f, set) => [
+          <TextInput key="l" label="템플릿 내역" value={f.label} onChange={(v) => set({ label: v })} />,
+          <NumberInput key="o" label="순서" min={1} stepper={false} value={f.order} onChange={(v) => set({ order: v })} />,
+        ]}
+        onSave={(f, edit) => api("stat_tpl_save", { template_id: edit ? edit.template_id : "", label: f.label.trim(), order: f.order })}
+        onDelete={(t) => api("stat_tpl_delete", { template_id: t.template_id })}
+        saveToast="템플릿 저장 완료!"
+        deleteToast="템플릿 삭제 완료!"
+        reload={reload}
+      />
     </>
   );
 }
@@ -221,7 +195,7 @@ export default function Stats() {
           {resetConfirm ? (
             <>
               <ErrorBox>⚠️ 초기화하면 모든 제출물 내역(열)이 전부 삭제됩니다. 진행할까요?</ErrorBox>
-              <TextInput label="관리자 비밀번호 입력" type="password" value={resetPin} onChange={setResetPin} help="관리자 비밀번호를 정확히 입력해야 초기화가 실행됩니다." />
+              <TextInput label="관리자 비밀번호 입력" type="password" value={resetPin} onChange={setResetPin} />
               <Cols w={2}>
                 <Btn onClick={doReset}>예(전체 삭제)</Btn>
                 <Btn

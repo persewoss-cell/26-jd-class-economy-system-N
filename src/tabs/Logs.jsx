@@ -1,7 +1,7 @@
 // 🧾 로그기록 (통합)
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
-import { useApp, H3, Caption, Btn, NumberInput, TextInput, Info, ErrorBox, DataTable, Loading } from "../components/ui.jsx";
+import { useApp, H3, Btn, NumberInput, TextInput, Info, ErrorBox, DataTable, Loading } from "../components/ui.jsx";
 
 const COLS = ["번호", "시간", "대상", "탭", "내역", "입금", "출금", "기록자", "분류", "변경후잔액"];
 
@@ -35,7 +35,6 @@ export default function Logs() {
   return (
     <>
       <H3>🧾 통합 로그기록</H3>
-      <Caption>모든 탭의 변경 이력을 분리 없이 하나의 표로 통합해 보여줍니다.</Caption>
       <Btn onClick={() => load(maxRows)}>로그 새로고침</Btn>
       <NumberInput label="표시 행 수" min={100} max={10000} step={100} value={maxRows} onChange={setMaxRows} />
       <ErrorBox>{err}</ErrorBox>

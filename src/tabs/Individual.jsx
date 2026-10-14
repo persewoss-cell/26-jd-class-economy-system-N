@@ -154,7 +154,6 @@ export default function Individual() {
           )}
         </Cols>
       ))}
-      {selected.length ? <Caption>선택됨: {selected.map(label).join(" · ")}</Caption> : null}
       <Cols w={3}>
         <Btn onClick={() => setMode("checked")}>체크학생 조회</Btn>
         <Btn onClick={() => setMode("all")}>전체 조회</Btn>
