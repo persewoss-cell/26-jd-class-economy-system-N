@@ -1,5 +1,5 @@
 // 📈 투자 (관리자 / 학생 / 권한학생 ⍟📈 투자(관리자))
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
 import {
   useApp, useLoad, Cols, H3, H4, Caption, Btn, TextInput, Select, NumberInput, Info, Warning, ErrorBox, Expander, DataTable, Loading,
@@ -280,7 +280,7 @@ function BuyForm({ products, onDone }) {
 
 export default function Invest({ adminMode }) {
   const app = useApp();
-  const { data, loading, error, reload } = useLoad("invest_load", { admin_mode: !!adminMode }, [adminMode, app.ver]);
+  const { data, error, reload } = useLoad("invest_load", { admin_mode: !!adminMode }, [adminMode, app.ver]);
   const [payErr, setPayErr] = useState("");
   if (error && !data) return <ErrorBox>{error}</ErrorBox>;
   if (!data) return <Loading />;

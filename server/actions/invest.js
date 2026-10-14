@@ -2,7 +2,7 @@
 import { col } from "../db.js";
 import { fail, requireLogin, requireAny, requireStudent, adminRecorder } from "../auth.js";
 import { adminTx, applyBalance, insertTx, redeemProjection, DEFAULT_POINT_PROFIT_PCT } from "../core.js";
-import { str, toInt, toFloat, forr, as2, toDate, fmtMd, fmtInvestDt } from "../../shared/format.js";
+import { str, toInt, toFloat, forr, as2, fmtMd, fmtInvestDt } from "../../shared/format.js";
 
 const INV_ADMIN = ["admin::📈 투자"];
 

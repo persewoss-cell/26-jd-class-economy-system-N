@@ -103,7 +103,7 @@ function RateTable({ cfg }) {
   );
 }
 
-function AdminPart({ data, reload }) {
+function AdminPart({ data }) {
   const app = useApp();
   const [pick, setPick] = useState("(선택 없음)");
   const [err, setErr] = useState("");
@@ -222,7 +222,7 @@ function StudentPart({ data }) {
 
 export default function Savings({ adminMode }) {
   const app = useApp();
-  const { data, error, reload } = useLoad("bank_load", { admin_mode: !!adminMode }, [adminMode, app.ver]);
+  const { data, error } = useLoad("bank_load", { admin_mode: !!adminMode }, [adminMode, app.ver]);
   const toasted = useRef(false);
   useEffect(() => {
     if (data && data.auto_matured > 0 && !toasted.current) {
@@ -237,7 +237,7 @@ export default function Savings({ adminMode }) {
       {!data && !error ? <Loading /> : null}
       {data ? (
         <>
-          {adminMode ? <AdminPart data={data} reload={reload} /> : <StudentPart data={data} />}
+          {adminMode ? <AdminPart data={data} /> : <StudentPart data={data} />}
           <RateTable cfg={data.rate_cfg} />
         </>
       ) : null}

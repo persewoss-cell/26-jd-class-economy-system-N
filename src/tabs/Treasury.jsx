@@ -74,9 +74,10 @@ export default function Treasury() {
   if (error) return <ErrorBox>{error}</ErrorBox>;
   if (!data) return <Loading />;
 
-  const save = async () => {
+  const save = async (dir) => {
     setErr("");
-    const r = await api("treasury_add", { memo: form.memo.trim(), income: form.inc, expense: form.exp });
+    if (!(form.amount > 0)) return setErr("금액을 입력해 주세요.");
+    const r = await api("treasury_add", { memo: form.memo.trim(), income: dir === "in" ? form.amount : 0, expense: dir === "out" ? form.amount : 0 });
     if (r.ok) {
       reset();
       app.toast("국고 저장 완료!", "✅");
@@ -131,13 +132,7 @@ export default function Treasury() {
       {data.rows.length ? <DataTable rows={data.rows} columns={["내역", "세입", "세출", "총액", "날짜-시간", "기록자"]} csvName="국고내역" /> : <Info>국고 내역이 아직 없어요.</Info>}
 
       <H3>📝 세입/세출 내역 입력</H3>
-      <TreasuryForm form={form} setForm={setForm} templates={data.templates} />
-      <Cols w={[1.2, 1.0]} va="center">
-        <Btn onClick={save}>
-          저장 (관리자, 국세청)
-        </Btn>
-        <Caption>※ 세입/세출 중 하나만 입력</Caption>
-      </Cols>
+      <TreasuryForm form={form} setForm={setForm} templates={data.templates} onAction={save} />
       <ErrorBox>{err}</ErrorBox>
 
       <SectionDivider />

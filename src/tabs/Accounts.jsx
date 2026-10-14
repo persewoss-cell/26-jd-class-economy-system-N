@@ -6,7 +6,7 @@ import { useApp, useLoad, Cols, H3, H4, Caption, Btn, Warning, ErrorBox, FileUpl
 
 export default function Accounts() {
   const app = useApp();
-  const { data, error, reload } = useLoad("acc_load", {}, [app.ver]);
+  const { data, error } = useLoad("acc_load", {}, [app.ver]);
   const [file, setFile] = useState(null);
   const [upMsg, setUpMsg] = useState(null);
   const [rows, setRows] = useState([]);

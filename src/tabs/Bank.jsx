@@ -6,7 +6,7 @@ import {
   useApp, useLoad, Cols, H3, Subheader, Caption, Btn, TextInput, Select, NumberInput, Checkbox, Radio, SubTabs, ConfirmModal,
   Info, Warning, ErrorBox, Success, DataTable, FileUpload, SectionDivider, Loading,
 } from "../components/ui.jsx";
-import { TradeForm, useTradeForm, templateDisplay, TX_COLUMNS, txRowsView } from "../components/trade.jsx";
+import { TradeForm, useTradeForm, splitAmount, templateDisplay, TX_COLUMNS, txRowsView } from "../components/trade.jsx";
 
 // ---------------- 되돌리기(관리자) ----------------
 function RollbackPanel({ mode, selfRows, onDone }) {
@@ -307,10 +307,11 @@ export function BankAdmin() {
   const [bForm, setBForm, bReset] = useTradeForm(treasuryRef);
   const [bErr, setBErr] = useState("");
   const [undo, setUndo] = useState(false);
-  const saveBulk = async () => {
+  const saveBulk = async (dir) => {
     setBErr("");
-    const { dep, wd, memo } = bForm;
-    if ((dep > 0 && wd > 0) || (dep === 0 && wd === 0)) return setBErr("입금/출금은 둘 중 하나만 입력해 주세요.");
+    const { memo } = bForm;
+    const { dep, wd } = splitAmount(dir, bForm.amount);
+    if (!(bForm.amount > 0)) return setBErr("금액을 입력해 주세요.");
     if (!memo.trim()) return setBErr("내역(메모)을 입력해 주세요.");
     const r = await api("bank_bulk", { memo: memo.trim(), dep, wd, treasury: bForm.treasury });
     if (r.ok) {
@@ -337,10 +338,11 @@ export function BankAdmin() {
     return list;
   }, [accounts.data]);
   const selected = accs.filter((a) => picks[a.student_id]);
-  const savePersonal = async () => {
+  const savePersonal = async (dir) => {
     setPErr("");
-    const { dep, wd, memo } = pForm;
-    if ((dep > 0 && wd > 0) || (dep === 0 && wd === 0)) return setPErr("입금/출금은 둘 중 하나만 입력해 주세요.");
+    const { memo } = pForm;
+    const { dep, wd } = splitAmount(dir, pForm.amount);
+    if (!(pForm.amount > 0)) return setPErr("금액을 입력해 주세요.");
     if (!memo.trim()) return setPErr("내역(메모)을 입력해 주세요.");
     const isDep = dep > 0;
     if (!selected.length) {
@@ -366,11 +368,8 @@ export function BankAdmin() {
       {sub === "전체" ? (
         <>
           <H3>🎁 전체 일괄 입금/출금</H3>
-          <TradeForm form={bForm} setForm={setBForm} templates={templates} />
-          <Cols w={2}>
-            <Btn onClick={saveBulk}>저장</Btn>
-            <Btn onClick={() => setUndo((v) => !v)}>되돌리기(관리자)</Btn>
-          </Cols>
+          <TradeForm form={bForm} setForm={setBForm} templates={templates} onAction={saveBulk} />
+          <Btn onClick={() => setUndo((v) => !v)}>되돌리기(관리자)</Btn>
           <ErrorBox>{bErr}</ErrorBox>
           {undo ? <RollbackPanel mode="admin" /> : null}
         </>
@@ -399,8 +398,7 @@ export function BankAdmin() {
               ))}
               {selected.length ? <Caption>선택됨: {selected.map((a) => a.name).join(" · ")}</Caption> : null}
               <H3>🎁 개인 입금/출금</H3>
-              <TradeForm form={pForm} setForm={setPForm} templates={templates} />
-              <Btn onClick={savePersonal}>저장</Btn>
+              <TradeForm form={pForm} setForm={setPForm} templates={templates} onAction={savePersonal} />
               <ErrorBox>{pErr}</ErrorBox>
             </>
           ) : null}
@@ -421,28 +419,26 @@ export function BankStudent() {
   const [undo, setUndo] = useState(false);
   const rows = (txs.data && txs.data.rows) || [];
 
-  const save = async () => {
+  const save = async (dir) => {
     setErr("");
     const memo = form.memo.trim();
     if (!memo) return setErr("내역을 입력해 주세요.");
-    if ((form.dep > 0 && form.wd > 0) || (form.dep === 0 && form.wd === 0)) return setErr("입금/출금은 둘 중 하나만 입력해 주세요.");
-    const r = await api("student_trade", { memo, dep: form.dep, wd: form.wd, treasury: form.treasury });
+    if (!(form.amount > 0)) return setErr("금액을 입력해 주세요.");
+    const { dep, wd } = splitAmount(dir, form.amount);
+    const r = await api("student_trade", { memo, dep, wd, treasury: form.treasury });
     if (r.ok) {
       app.toast(r.mode === "request" ? "입금 요청 완료!" : "저장 완료!", r.mode === "request" ? "📨" : "✅");
       reset();
       app.refresh();
-    } else setErr(r.error || (form.dep > 0 ? "입금 신청 실패" : "저장 실패"));
+    } else setErr(r.error || (dep > 0 ? "입금 신청 실패" : "저장 실패"));
   };
 
   if (txs.error && !txs.data) return <ErrorBox>{txs.error}</ErrorBox>;
   return (
     <>
       <Subheader>📝 통장 입금/출금하기</Subheader>
-      <TradeForm form={form} setForm={setForm} templates={(tpls.data && tpls.data.templates) || []} />
-      <Cols w={[1, 1]}>
-        <Btn onClick={save}>저장</Btn>
-        <Btn onClick={() => setUndo((v) => !v)}>되돌리기(관리자)</Btn>
-      </Cols>
+      <TradeForm form={form} setForm={setForm} templates={(tpls.data && tpls.data.templates) || []} onAction={save} depositText="💰 입금 요청" />
+      <Btn onClick={() => setUndo((v) => !v)}>되돌리기(관리자)</Btn>
       <ErrorBox>{err}</ErrorBox>
       {undo ? <RollbackPanel mode="self" selfRows={rows} onDone={() => setUndo(false)} /> : null}
       <Subheader>📒 통장 거래 내역(최신순)</Subheader>

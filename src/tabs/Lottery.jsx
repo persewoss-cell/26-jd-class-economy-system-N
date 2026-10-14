@@ -11,7 +11,7 @@ function LotteryAdmin() {
   const app = useApp();
   const [pickId, setPickId] = useState("");
   const [visibleId, setVisibleId] = useState("");
-  const { data, error, reload } = useLoad("lottery_admin_load", { pick_round_id: pickId, visible_round_id: visibleId }, [app.ver, pickId, visibleId]);
+  const { data, error } = useLoad("lottery_admin_load", { pick_round_id: pickId, visible_round_id: visibleId }, [app.ver, pickId, visibleId]);
   const [cfg, setCfg] = useState({ price: 20, first: 80, tax: 40, second: 20, third: 20 });
   const [joinCnt, setJoinCnt] = useState(1);
   const [joinTre, setJoinTre] = useState(true);
@@ -218,7 +218,7 @@ function LotteryAdmin() {
 
 function LotteryUser() {
   const app = useApp();
-  const { data, error, reload } = useLoad("lottery_user_load", {}, [app.ver]);
+  const { data, error } = useLoad("lottery_user_load", {}, [app.ver]);
   const empty = () => Array.from({ length: 5 }, () => ["", "", "", ""]);
   const [games, setGames] = useState(empty);
   const [errs, setErrs] = useState([]);

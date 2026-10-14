@@ -156,7 +156,16 @@ h1, h2, h3, h4 { margin: 0; line-height: 1.25; }
 }
 .round-btns .rb:hover { border-color: var(--sel); }
 .round-btns .rb:active { transform: scale(0.92); }
-.round-btns .rb.on { background: var(--sel); border-color: var(--sel-dark); color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
+.round-btns .rb:active { background: var(--sel); border-color: var(--sel-dark); color: #fff; }
+
+/* 입금/출금(세입/세출) 큰 버튼: 평소엔 테두리만, 템플릿과 같은 쪽은 색을 채워 강조 */
+.btn.act { min-height: 3.3rem; font-size: 1.12rem; font-weight: 700; border-width: 2px; border-radius: 12px; }
+.btn.act-in { color: #047857; border-color: var(--green); background: #ecfdf5; }
+.btn.act-out { color: #b91c1c; border-color: var(--red); background: #fef2f2; }
+.btn.act-in:hover:not(:disabled) { color: #047857; border-color: #059669; }
+.btn.act-out:hover:not(:disabled) { color: #b91c1c; border-color: #dc2626; }
+.btn.act-in.hint, .btn.act-in:active:not(:disabled) { background: var(--green); border-color: #059669; color: #fff; }
+.btn.act-out.hint, .btn.act-out:active:not(:disabled) { background: var(--red); border-color: #dc2626; color: #fff; }
 
 /* ---------- 메인 메뉴(가로 스크롤) ---------- */
 .main-menu {
@@ -240,10 +249,8 @@ table.inv_hist_table th { font-weight: 700; background: rgba(0,0,0,0.03); text-a
 .ox .o.on.v-T { background: var(--blue); border-color: #2563eb; }
 .ox.disabled .o { cursor: default; }
 .ox.disabled .o:not(.on) { opacity: 0.55; }
-.grid-sep { border-bottom: 1px solid #e5e7eb; }
 .stat-hdr { font-weight: 700; line-height: 1.2; font-size: 0.88rem; text-align: center; word-break: keep-all; }
-.credit-ledger-score { text-align: center; font-weight: 900; line-height: 1.1; }
-.credit-ledger-divider { height: 1px; background: #d8d8d8; margin: 1px 0; }
+.credit-ledger-score { font-weight: 800; }
 
 /* 학생 상단 요약 */
 .bank-info-line { font-size: 22px; line-height: 1.2; margin: 0.2rem 0; }
@@ -296,3 +303,15 @@ table.inv_hist_table th { font-weight: 700; background: rgba(0,0,0,0.03); text-a
 .modal-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
 .modal-btns .btn { min-height: 2.8rem; font-size: 1.05rem; font-weight: 600; }
 @keyframes mfade { from { opacity: 0; } to { opacity: 1; } }
+
+/* ---------- 통계·신용 장부: 번호·이름 고정 + 옆으로 밀기 ---------- */
+.ledger-wrap { overflow: auto; max-height: 72vh; border: 1px solid #e5e7eb; border-radius: var(--radius); -webkit-overflow-scrolling: touch; }
+table.ledger { border-collapse: separate; border-spacing: 0; font-size: 0.92rem; }
+.ledger th, .ledger td { padding: 0.4rem 0.55rem; border-bottom: 1px solid #eef0f3; text-align: center; white-space: nowrap; background: #fff; }
+.ledger thead th { position: sticky; top: 0; z-index: 2; background: #f8f9fb; white-space: normal; vertical-align: bottom; }
+.ledger .lg-no { position: sticky; left: 0; z-index: 1; width: 3.2rem; min-width: 3.2rem; }
+.ledger .lg-name { position: sticky; left: 3.2rem; z-index: 1; min-width: 5.5rem; text-align: left; border-right: 1px solid #e5e7eb; font-weight: 600; }
+.ledger thead .lg-no, .ledger thead .lg-name { z-index: 3; }
+.ledger tr.lg-bulk td { background: #fffbeb; border-bottom: 2px solid #e5e7eb; }
+.ledger tr.lg-avg td { background: #f8f9fb; font-weight: 700; }
+.ledger tbody tr:hover td { background: #fafbfc; }

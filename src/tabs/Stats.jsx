@@ -1,9 +1,7 @@
 // 📊 통계청 (제출물 O/X/△ 관리) — 클릭은 화면에서만 바뀌고 [✅ 저장]을 눌러야 DB 반영
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
 import { useApp, useLoad, Cols, H3, Btn, TextInput, Select, NumberInput, Checkbox, Info, Warning, ErrorBox, SectionDivider, Loading } from "../components/ui.jsx";
-
-export const VISIBLE_COLS = 7;
 
 export function OX({ value, onPick, disabled }) {
   return (
@@ -17,21 +15,38 @@ export function OX({ value, onPick, disabled }) {
   );
 }
 
-export function PageNav({ page, total, onPage, extra }) {
+// 번호·이름은 고정하고 제출물 열은 옆으로 밀어서 보는 장부 (최신 제출물이 왼쪽)
+// rows: [{ key, no, name, cell: (제출물) => 내용, className }]
+export function LedgerGrid({ subs, rows, colWidth = "7.5rem" }) {
   return (
-    <Cols w={extra ? [4, 3] : [1]} gap="small" va="center">
-      <Cols w={[1, 1, 1, 1]} gap="small" va="center">
-        <Btn onClick={() => onPage(page - 1)} disabled={page <= 1}>
-          ◀
-        </Btn>
-        <NumberInput hideLabel label="페이지" min={1} max={total} value={page} onChange={(v) => onPage(v)} />
-        <div style={{ textAlign: "center", fontWeight: 700 }}>/ 전체페이지 {total}</div>
-        <Btn onClick={() => onPage(page + 1)} disabled={page >= total}>
-          ▶
-        </Btn>
-      </Cols>
-      {extra || null}
-    </Cols>
+    <div className="ledger-wrap">
+      <table className="ledger">
+        <thead>
+          <tr>
+            <th className="lg-no">번호</th>
+            <th className="lg-name">이름</th>
+            {subs.map((s) => (
+              <th key={s.submission_id} className="stat-hdr" style={{ minWidth: colWidth }}>
+                {s.date_display}
+                <br />
+                {s.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.key} className={r.className || ""}>
+              <td className="lg-no">{r.no}</td>
+              <td className="lg-name">{r.name}</td>
+              {subs.map((s) => (
+                <td key={s.submission_id}>{r.cell(s)}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -127,7 +142,6 @@ export default function Stats() {
   const app = useApp();
   const { data, error, reload } = useLoad("stats_load", {}, [app.ver]);
   const [edit, setEdit] = useState({});
-  const [page, setPage] = useState(1);
   const [resetConfirm, setResetConfirm] = useState(false);
   const [resetPin, setResetPin] = useState("");
   const [delConfirm, setDelConfirm] = useState(false);
@@ -152,16 +166,9 @@ export default function Stats() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sig, dataKey]);
 
-  const total = data ? Math.max(1, Math.ceil(data.subs.length / VISIBLE_COLS)) : 1;
-  useEffect(() => {
-    if (page > total) setPage(total);
-  }, [page, total]);
-
   if (error) return <ErrorBox>{error}</ErrorBox>;
   if (!data) return <Loading />;
   const { subs, students, templates } = data;
-  const view = subs.slice((page - 1) * VISIBLE_COLS, page * VISIBLE_COLS);
-  const w = [0.37, 0.7, ...view.map(() => 1.2)];
 
   const save = async () => {
     setErr("");
@@ -198,18 +205,14 @@ export default function Stats() {
     <>
       <AddSubmission templates={templates} onAdded={reload} />
       <H3>📋 통계 관리 장부</H3>
-      <PageNav
-        page={page}
-        total={total}
-        onPage={(p) => setPage(Math.max(1, Math.min(total, p)))}
-        extra={
-          <Cols w={[1, 1, 1]} gap="small">
-            <Btn onClick={save}>✅ 저장</Btn>
-            <Btn onClick={() => setResetConfirm(true)}>🧹 초기화</Btn>
-            <Btn onClick={() => setDelConfirm(true)}>🗑️ 삭제</Btn>
-          </Cols>
-        }
-      />
+      <Cols w={[4, 3]} gap="small" va="center">
+        <div className="caption">{subs.length ? `제출물 ${subs.length}개 · 표를 옆으로 밀어서 지난 제출물을 볼 수 있어요` : ""}</div>
+        <Cols w={[1, 1, 1]} gap="small">
+          <Btn onClick={save}>✅ 저장</Btn>
+          <Btn onClick={() => setResetConfirm(true)}>🧹 초기화</Btn>
+          <Btn onClick={() => setDelConfirm(true)}>🗑️ 삭제</Btn>
+        </Cols>
+      </Cols>
       <ErrorBox>{err}</ErrorBox>
       {!subs.length ? (
         <Info>제출물 내역이 없습니다. 위에서 ‘제출물 내역 추가’를 먼저 해주세요.</Info>
@@ -245,48 +248,37 @@ export default function Stats() {
             </>
           ) : null}
 
-          <Cols w={w} va="center">
-            <b>번호</b>
-            <b>이름</b>
-            {view.map((s) => (
-              <div className="stat-hdr" key={s.submission_id}>
-                {s.date_display}
-                <br />
-                {s.label}
-              </div>
-            ))}
-          </Cols>
-          <Cols w={w} va="center">
-            <b>일괄</b>
-            <b>버튼⚡</b>
-            {view.map((s) => (
-              <OX
-                key={s.submission_id}
-                value={bulkPick[s.submission_id] || "X"}
-                onPick={(v) => {
-                  setBulkPick((b) => ({ ...b, [s.submission_id]: v }));
-                  setAll(s.submission_id, v);
-                }}
-              />
-            ))}
-          </Cols>
-          <div className="grid-sep" />
-          {students.map((st, i) => (
-            <React.Fragment key={st.student_id}>
-              <Cols w={w} va="center">
-                <div>{st.no}</div>
-                <div>{st.name}</div>
-                {view.map((s) => (
+          <LedgerGrid
+            subs={subs}
+            rows={[
+              {
+                key: "_bulk",
+                no: "⚡",
+                name: "일괄",
+                className: "lg-bulk",
+                cell: (s) => (
                   <OX
-                    key={s.submission_id}
+                    value={bulkPick[s.submission_id] || "X"}
+                    onPick={(v) => {
+                      setBulkPick((b) => ({ ...b, [s.submission_id]: v }));
+                      setAll(s.submission_id, v);
+                    }}
+                  />
+                ),
+              },
+              ...students.map((st) => ({
+                key: st.student_id,
+                no: st.no,
+                name: st.name,
+                cell: (s) => (
+                  <OX
                     value={(edit[s.submission_id] || {})[st.student_id] || "X"}
                     onPick={(v) => setEdit((e) => ({ ...e, [s.submission_id]: { ...(e[s.submission_id] || {}), [st.student_id]: v } }))}
                   />
-                ))}
-              </Cols>
-              {i < students.length - 1 ? <div className="grid-sep" /> : null}
-            </React.Fragment>
-          ))}
+                ),
+              })),
+            ]}
+          />
         </>
       )}
       <StatTemplates templates={templates} reload={reload} />

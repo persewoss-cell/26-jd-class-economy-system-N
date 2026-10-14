@@ -2,7 +2,7 @@
 import { col } from "../db.js";
 import { fail, requireAny, requireStudent, adminRecorder } from "../auth.js";
 import { adminTx } from "../core.js";
-import { str, toInt, ior, toDate, fmtKrDatetime, kstParts, pad2, KST_OFFSET_MS } from "../../shared/format.js";
+import { str, toInt, ior, fmtKrDatetime, kstParts, pad2, KST_OFFSET_MS } from "../../shared/format.js";
 
 const MART_ADMIN = ["admin::🛒마트"];
 

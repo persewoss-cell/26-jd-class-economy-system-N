@@ -147,7 +147,7 @@ function AuctionAdmin() {
 
 function AuctionUser() {
   const app = useApp();
-  const { data, error, reload } = useLoad("auction_user_load", {}, [app.ver]);
+  const { data, error } = useLoad("auction_user_load", {}, [app.ver]);
   const [amt, setAmt] = useState(0);
   const [confirm, setConfirm] = useState("아니오");
   const [warn, setWarn] = useState("");

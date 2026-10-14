@@ -4,7 +4,7 @@ import { fail, requireLogin, requireAny, isAdminPin, adminRecorder } from "../au
 import {
   treasuryTx, getCreditCfg, listStatSubmissions, manualDeltaMap, calcCredit, activeStudents,
 } from "../core.js";
-import { str, toInt, ior, toDate, fmtKrDatetime, fmtKrDatetimeNoYear, fmtMd, kstTodayIso, scoreToGrade } from "../../shared/format.js";
+import { str, toInt, ior, fmtKrDatetime, fmtKrDatetimeNoYear, fmtMd, kstTodayIso, scoreToGrade } from "../../shared/format.js";
 
 // 탭이 보이는 학생은 관리자와 똑같이 사용 (보기 권한 = 쓰기 권한)
 const TRE_VIEW = ["tab::🏛️ 국세청(국고)", "treasury_read", "treasury_write"];

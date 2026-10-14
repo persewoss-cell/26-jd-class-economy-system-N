@@ -1,8 +1,8 @@
 // 💳 신용등급
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
-import { useApp, useLoad, Cols, H3, Btn, Select, NumberInput, Info, ErrorBox, Expander, DataTable, Loading } from "../components/ui.jsx";
-import { PageNav, VISIBLE_COLS } from "./Stats.jsx";
+import { useApp, useLoad, Cols, H3, Btn, Select, NumberInput, Info, Expander, DataTable, Loading } from "../components/ui.jsx";
+import { LedgerGrid } from "./Stats.jsx";
 
 export function scoreToGrade(s) {
   s = parseInt(s, 10) || 0;
@@ -97,7 +97,6 @@ function ManualAdjust({ students, onSaved }) {
 export default function Credit() {
   const app = useApp();
   const { data, error, reload } = useLoad("credit_load", {}, [app.ver]);
-  const [page, setPage] = useState(1);
   if (error) return <Info>{error}</Info>;
   if (!data) return <Loading />;
   const { cfg } = data;
@@ -125,10 +124,10 @@ export default function Credit() {
     sc += (data.manual || {})[stid] || 0;
     return Math.max(0, Math.min(100, sc));
   };
-  const total = Math.max(1, Math.ceil(subs.length / VISIBLE_COLS));
-  const p = Math.min(page, total);
-  const view = subs.slice((p - 1) * VISIBLE_COLS, p * VISIBLE_COLS);
-  const w = [0.37, 0.7, ...view.map(() => 1.2)];
+  const avgAt = (sid) => {
+    const sum = students.reduce((acc, st) => acc + scoreAt(sid, st.student_id), 0);
+    return students.length ? Math.round((sum / students.length) * 100) / 100 : 0;
+  };
 
   return (
     <>
@@ -139,49 +138,21 @@ export default function Credit() {
       {students.length > 0 && subs.length > 0 ? (
         <>
           <H3>🌟 신용등급 관리 장부</H3>
-          <PageNav page={p} total={total} onPage={(x) => setPage(Math.max(1, Math.min(total, x)))} />
-          <Cols w={w} va="center">
-            <b>번호</b>
-            <b>이름</b>
-            {view.map((s) => (
-              <div key={s.submission_id} style={{ textAlign: "center", fontWeight: 900, lineHeight: 1.15 }}>
-                {s.date_display}
-                <br />
-                {s.label}
-              </div>
-            ))}
-          </Cols>
-          {students.map((st) => (
-            <React.Fragment key={st.student_id}>
-              <Cols w={w} va="center">
-                <div>{st.no}</div>
-                <div>{st.name}</div>
-                {view.map((s) => {
+          <LedgerGrid
+            subs={subs}
+            rows={[
+              ...students.map((st) => ({
+                key: st.student_id,
+                no: st.no,
+                name: st.name,
+                cell: (s) => {
                   const sc = scoreAt(s.submission_id, st.student_id);
-                  return (
-                    <div className="credit-ledger-score" key={s.submission_id}>
-                      {sc}점/{scoreToGrade(sc)}등급
-                    </div>
-                  );
-                })}
-              </Cols>
-              <div className="credit-ledger-divider" />
-            </React.Fragment>
-          ))}
-          <Cols w={w} va="center">
-            <div />
-            <b>평균</b>
-            {view.map((s) => {
-              const sum = students.reduce((acc, st) => acc + scoreAt(s.submission_id, st.student_id), 0);
-              const avg = students.length ? Math.round((sum / students.length) * 100) / 100 : 0;
-              return (
-                <div className="credit-ledger-score" key={s.submission_id}>
-                  {avg.toFixed(2)}점
-                </div>
-              );
-            })}
-          </Cols>
-          <div className="credit-ledger-divider" />
+                  return <span className="credit-ledger-score">{sc}점/{scoreToGrade(sc)}등급</span>;
+                },
+              })),
+              { key: "_avg", no: "", name: "평균", className: "lg-avg", cell: (s) => <span className="credit-ledger-score">{avgAt(s.submission_id).toFixed(2)}점</span> },
+            ]}
+          />
           <H3>📌 신용등급 구분표</H3>
           <CreditBand />
         </>
