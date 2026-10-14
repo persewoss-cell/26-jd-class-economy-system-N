@@ -296,8 +296,7 @@ export default function App() {
         <main className="main">
           {user && user.role === "admin" ? (
             <header className="topbar admin-bar">
-              <span />
-              <div className="brand center">
+              <div className="brand">
                 <span className="brand-logo">🏫</span>
                 <div>
                   <div className="brand-title">학급 경제 시스템</div>

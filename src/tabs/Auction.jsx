@@ -78,11 +78,9 @@ function AuctionAdmin() {
   return (
     <>
       <H3>📢 경매 개시</H3>
-      <Cols w={2}>
+      <Cols w={[2.4, 1.6, 0.8, 0.8]} va="bottom">
         <TextInput label="입찰 내역" value={bidName} onChange={setBidName} />
         <TextInput label="소속" value={aff} onChange={setAff} />
-      </Cols>
-      <Cols w={2}>
         <Btn onClick={open}>개시</Btn>
         <Btn onClick={close}>마감</Btn>
       </Cols>

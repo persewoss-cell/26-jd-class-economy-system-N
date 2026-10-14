@@ -243,15 +243,13 @@ function ProductAdmin({ all, reload }) {
       <H3>
         🧰 투자 종목 추가/수정/삭제 <span className="h-note">환산주가(자동): {f2(norm)} / 100</span>
       </H3>
-      <Cols w={[1.5, 1.7, 0.9, 0.9, 1.1, 1]} va="bottom">
+      <Cols w={[1.3, 1.5, 0.8, 0.8, 1.05, 0.95, 0.75, 0.75]} va="bottom">
         <Select label="편집 대상" value={sel} options={["(신규 추가)", ...active.map((p) => p.name)]} onChange={onSel} />
         <TextInput label="투자 종목명" value={f.name} onChange={(v) => setF((x) => ({ ...x, name: v }))} />
         <NumberInput label="최하값" stepper={false} value={f.min} onChange={(v) => setF((x) => ({ ...x, min: v }))} min={-9999999.99} max={9999999.99} step={0.01} decimals={2} />
         <NumberInput label="최대값" stepper={false} value={f.max} onChange={(v) => setF((x) => ({ ...x, max: v }))} min={-9999999.99} max={9999999.99} step={0.01} decimals={2} />
-        <NumberInput label="초기/현재 실제주가" stepper={false} value={f.real} onChange={(v) => setF((x) => ({ ...x, real: v }))} min={-9999999.99} max={9999999.99} step={0.01} decimals={2} />
+        <NumberInput label="실제주가" stepper={false} value={f.real} onChange={(v) => setF((x) => ({ ...x, real: v }))} min={-9999999.99} max={9999999.99} step={0.01} decimals={2} />
         <NumberInput label="주가 1당 손익 %" stepper={false} value={f.pct} onChange={(v) => setF((x) => ({ ...x, pct: v }))} min={0} max={1000} step={0.01} decimals={2} />
-      </Cols>
-      <Cols w={2}>
         <Btn onClick={save}>✅ 저장</Btn>
         <Btn onClick={() => cur && setDelAsk(true)} disabled={!cur}>
           🗑️ 삭제
