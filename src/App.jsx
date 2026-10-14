@@ -23,6 +23,8 @@ import Goal from "./tabs/Goal.jsx";
 
 // 메뉴에 보이는 아이콘만 더 귀엽게 (권한 이름·저장 값은 그대로)
 const ICON_SWAP = { "🔎": "🔍", "🏦": "🐷", "⭐": "🔑", "🏷️": "🔨", "🧾": "📜", "📝": "📒" };
+// 메뉴 한 줄에 딱 맞도록 짧게 보이는 이름 (권한·탭 이름은 그대로)
+const MENU_SHORT = { "국세청(국고)": "국세청", "은행(적금)": "은행", "계정 정보": "계정" };
 function menuLabel(label) {
   let extra = false;
   let s = String(label || "");
@@ -32,7 +34,8 @@ function menuLabel(label) {
   }
   const m = s.match(/^(\p{Extended_Pictographic}\uFE0F?)\s*(.*)$/u);
   const icon = m ? ICON_SWAP[m[1]] || m[1] : "";
-  const text = m ? m[2] : s;
+  let text = (m ? m[2] : s).replace(/\(관리자\)$/, "").trim();
+  text = MENU_SHORT[text] || text;
   return { icon, text, extra };
 }
 

@@ -317,12 +317,12 @@ function JobEdit({ data, reload }) {
     <>
       <H3>➕ 직업 추가 / 수정</H3>
       <Select label="편집 대상" value={pick} options={labels} onChange={onPick} />
-      <Cols w={[2.2, 1.2, 1.2]}>
+      <Cols w={[2, 1.2, 1.2, 1]} va="bottom">
         <TextInput label="직업" value={f.job} onChange={(v) => setF((x) => ({ ...x, job: v }))} />
         <NumberInput label="월급" min={0} value={f.salary} onChange={(v) => setF((x) => ({ ...x, salary: v }))} />
+        <NumberInput label="학생 수(최소 1)" min={1} value={f.count} onChange={(v) => setF((x) => ({ ...x, count: v }))} />
         <Metric label="실수령액(자동)" value={calcNet(f.salary, data.cfg)} />
       </Cols>
-      <NumberInput label="학생 수(최소 1)" min={1} value={f.count} onChange={(v) => setF((x) => ({ ...x, count: v }))} />
       <Cols w={[1, 1, 1]}>
         <Btn onClick={save}>✅ 저장</Btn>
         <span />

@@ -112,6 +112,15 @@ export const Loading = ({ text = "불러오는 중..." }) => (
 );
 
 // ---------------- 버튼 ----------------
+// 버튼 글자로 색을 정함: 저장·추가·승인 같은 실행은 민트, 삭제·회수·거절은 코랄, 나머지는 기본
+const textOf = (c) => (typeof c === "string" || typeof c === "number" ? String(c) : Array.isArray(c) ? c.map(textOf).join("") : c && c.props ? textOf(c.props.children) : "");
+function toneOf(children) {
+  const t = textOf(children);
+  if (/삭제|회수|거절|초기화|해제|마감|중도해지|중도 해지|되돌리기|아니오/.test(t)) return "tone-danger";
+  if (/저장|추가|승인|지급|개시|구입|제출|고용|부여|조회|반영|참여|추첨|생성|변경|로그인|예$|^예|투자하기|가입|적용|실행|등록/.test(t)) return "tone-main";
+  return "";
+}
+
 export function Btn({ children, onClick, full = true, disabled, className = "", style, title }) {
   const [busy, setBusy] = useState(false);
   const handle = async (e) => {
@@ -127,7 +136,7 @@ export function Btn({ children, onClick, full = true, disabled, className = "", 
     }
   };
   return (
-    <button type="button" title={title} className={`btn ${full ? "full" : ""} ${busy ? "busy" : ""} ${className}`} style={style} disabled={disabled} onClick={handle}>
+    <button type="button" title={title} className={`btn ${full ? "full" : ""} ${busy ? "busy" : ""} ${/\b(act|dl|ghost|primary)\b/.test(className) ? "" : toneOf(children)} ${className}`} style={style} disabled={disabled} onClick={handle}>
       {children}
     </button>
   );
