@@ -231,6 +231,96 @@ function PayrollBox({ data, reload }) {
   );
 }
 
+// 📋 직업/월급 목록 (학생별 배정) — 목록 표와 해제 팝업에서 같이 씀
+function assignmentRows(data) {
+  const idTo = Object.fromEntries(data.students.map((s) => [s.student_id, s]));
+  const rows = [];
+  for (const r of data.rows) {
+    const cnt = Math.max(0, parseInt(r.student_count, 10) || 1);
+    let a = [...r.assigned_ids];
+    if (cnt === 0) a = [];
+    else {
+      if (a.length < cnt) a = a.concat(Array(cnt - a.length).fill(""));
+      if (a.length > cnt) a = a.slice(0, cnt);
+    }
+    for (const sid of a) {
+      if (!sid) continue;
+      const s = idTo[sid];
+      rows.push({ key: `${r._id}|${sid}`, job_id: r._id, sid, 번호: s ? s.no : 999999, 이름: s ? s.name : "", 직업: r.job, 월급: r.salary, 실수령액: calcNet(r.salary, data.cfg) });
+    }
+  }
+  rows.sort((a, b) => a.번호 - b.번호 || (a.이름 < b.이름 ? -1 : a.이름 > b.이름 ? 1 : 0) || (a.직업 < b.직업 ? -1 : 1));
+  return rows;
+}
+
+// 해제 팝업: 배정 목록에서 체크한 것만 해제
+function FirePopup({ data, open, onClose, onDone }) {
+  const rows = assignmentRows(data);
+  const [chk, setChk] = useState({});
+  const [err, setErr] = useState("");
+  const all = rows.length > 0 && rows.every((r) => chk[r.key]);
+  const run = async () => {
+    setErr("");
+    const picked = rows.filter((r) => chk[r.key]);
+    if (!picked.length) return setErr("해제할 학생을 체크해 주세요.");
+    const byJob = {};
+    picked.forEach((r) => (byJob[r.job_id] = [...(byJob[r.job_id] || []), r.sid]));
+    for (const [job_id, sids] of Object.entries(byJob)) {
+      const r = await api("job_assign", { job_id, op: "fire", sids });
+      if (!r.ok) return setErr(r.error || "해제 실패");
+    }
+    setChk({});
+    onDone(picked.length);
+  };
+  return (
+    <Popup open={open} title="➖ 직업 해제" onClose={onClose}>
+      {!rows.length ? (
+        <Info>아직 직업이 배정된 학생이 없습니다.</Info>
+      ) : (
+        <>
+          <div className="tbl-wrap">
+            <div className="tbl-scroll" style={{ maxHeight: 380 }}>
+              <table className="tbl">
+                <thead>
+                  <tr>
+                    <th style={{ width: "3.2rem" }}>
+                      <Checkbox label="" checked={all} onChange={(v) => setChk(v ? Object.fromEntries(rows.map((r) => [r.key, true])) : {})} />
+                    </th>
+                    <th>번호</th>
+                    <th>이름</th>
+                    <th>직업</th>
+                    <th>월급</th>
+                    <th>실수령액</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r) => (
+                    <tr key={r.key} onClick={() => setChk((c) => ({ ...c, [r.key]: !c[r.key] }))} style={{ cursor: "pointer" }}>
+                      <td onClick={(e) => e.stopPropagation()}>
+                        <Checkbox label="" checked={!!chk[r.key]} onChange={(v) => setChk((c) => ({ ...c, [r.key]: v }))} />
+                      </td>
+                      <td>{r.번호}</td>
+                      <td>{r.이름}</td>
+                      <td>{r.직업}</td>
+                      <td>{r.월급}</td>
+                      <td>{r.실수령액}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <Cols w={[3, 1]} va="center">
+            <div className="caption">{`맨 위 체크칸을 누르면 전체 선택 · ${Object.values(chk).filter(Boolean).length}명 선택됨`}</div>
+            <Btn onClick={run}>➖ 체크한 학생 해제</Btn>
+          </Cols>
+        </>
+      )}
+      <ErrorBox>{err}</ErrorBox>
+    </Popup>
+  );
+}
+
 function JobAssign({ data, reload }) {
   const app = useApp();
   const accOptions = data.students.map((r) => `${r.no} ${r.name}`);
@@ -243,7 +333,7 @@ function JobAssign({ data, reload }) {
   const [job, setJob] = useState(jobLabels[0] || null);
   const [sel, setSel] = useState([]);
   const [msg, setMsg] = useState(null);
-  const [clearChk, setClearChk] = useState(false);
+  const [fireOpen, setFireOpen] = useState(false);
   useEffect(() => {
     if (!job || !jobLabels.includes(job)) setJob(jobLabels[0] || null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -270,28 +360,27 @@ function JobAssign({ data, reload }) {
     } else setMsg(["info", "해제할 배정이 없습니다."]);
   };
 
-  const clearAll = async () => {
-    const r = await api("job_clear_all", {});
-    if (r.ok) {
-      app.toast("전체 직업 해제 완료!", "✅");
-      setClearChk(false);
-      setSel([]);
-      reload();
-    } else setMsg(["error", `전체 직업 해제 실패: ${r.error}`]);
-  };
 
   return (
     <>
       <H3>🎖️ 직업 지정 / 회수</H3>
-      <Cols w={[1.8, 2.1, 0.8, 0.8, 1.5]} va="bottom">
+      <Cols w={[2, 2.6, 0.8, 0.8]} va="bottom">
         {jobLabels.length ? <Select label="부여할 직업 선택" value={job} options={jobLabels} onChange={setJob} /> : <span />}
         <MultiSelect label="대상 학생 선택(복수 선택 가능)" value={sel} options={accOptions} onChange={setSel} />
         <Btn onClick={() => act("hire")}>➕ 고용</Btn>
-        <Btn onClick={() => act("fire")}>➖ 해제</Btn>
-        <Btn onClick={() => setClearChk(true)}>🔥 전체 직업 해제</Btn>
+        <Btn onClick={() => setFireOpen(true)}>➖ 해제</Btn>
       </Cols>
       {msg ? msg[0] === "warning" ? <Warning>{msg[1]}</Warning> : msg[0] === "info" ? <Info>{msg[1]}</Info> : <ErrorBox>{msg[1]}</ErrorBox> : null}
-      <ConfirmModal open={clearChk} title="⚠️ 전체 직업 해제" message="모든 학생의 직업을 해제할까요? 되돌릴 수 없어요." onYes={() => { setClearChk(false); clearAll(); }} onNo={() => setClearChk(false)} />
+      <FirePopup
+        data={data}
+        open={fireOpen}
+        onClose={() => setFireOpen(false)}
+        onDone={(n) => {
+          setFireOpen(false);
+          app.toast(`해제 완료! (${n}명)`, "✅");
+          reload();
+        }}
+      />
     </>
   );
 }
@@ -419,23 +508,7 @@ export default function Jobs() {
           <JobAssign data={data} reload={reload} />
           <H3>📋 직업/월급 목록</H3>
           {(() => {
-            const idTo = Object.fromEntries(data.students.map((s) => [s.student_id, s]));
-            const rows = [];
-            for (const r of data.rows) {
-              const cnt = Math.max(0, parseInt(r.student_count, 10) || 1);
-              let a = [...r.assigned_ids];
-              if (cnt === 0) a = [];
-              else {
-                if (a.length < cnt) a = a.concat(Array(cnt - a.length).fill(""));
-                if (a.length > cnt) a = a.slice(0, cnt);
-              }
-              for (const sid of a) {
-                if (!sid) continue;
-                const s = idTo[sid];
-                rows.push({ 번호: s ? s.no : 999999, 이름: s ? s.name : "", 직업: r.job, 월급: r.salary, 실수령액: calcNet(r.salary, data.cfg) });
-              }
-            }
-            rows.sort((a, b) => a.번호 - b.번호 || (a.이름 < b.이름 ? -1 : a.이름 > b.이름 ? 1 : 0) || (a.직업 < b.직업 ? -1 : 1));
+            const rows = assignmentRows(data);
             return rows.length ? <DataTable rows={rows} columns={["번호", "이름", "직업", "월급", "실수령액"]} csvName="직업월급" /> : <Info>아직 직업이 배정된 학생이 없습니다.</Info>;
           })()}
           <JobEdit data={data} reload={reload} />
