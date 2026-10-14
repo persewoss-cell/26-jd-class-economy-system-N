@@ -22,7 +22,7 @@ function DepositApproval() {
       {srt.btn(col)}
     </span>
   );
-  const W = [0.8, 0.9, 1.4, 2.2, 3.2, 1.2, 1.1, 1.9];
+  const W = [0.45, 0.55, 1.1, 1.3, 2.7, 0.75, 0.85, 1.75];
 
   const process = async (ids, action, kind) => {
     setWarn("");
@@ -34,12 +34,11 @@ function DepositApproval() {
       if (processed > 0) app.toast(action === "approve" ? "승인 완료! (통장에 반영됨)" : "거절 처리 완료!", action === "approve" ? "✅" : "🧾");
       else return setErr(r.error || (action === "approve" ? "승인 실패" : "거절 실패"));
     } else if (processed > 0) {
-      const head = kind === "checked" ? (action === "approve" ? "체크 승인 완료!" : "체크 거절 완료!") : action === "approve" ? "전체 승인 완료!" : "전체 거절 완료!";
-      let msg = `${head} (${processed}건)`;
+      let msg = `${action === "approve" ? "승인 완료!" : "거절 완료!"} (${processed}건)`;
       if ((r.failed || 0) > 0) msg += ` / 실패 ${r.failed}건`;
       app.toast(msg, action === "approve" ? "✅" : "🧾");
     } else {
-      return setErr(kind === "checked" ? (action === "approve" ? "체크 승인 실패" : "체크 거절 실패") : action === "approve" ? "전체 승인 실패" : "전체 거절 실패");
+      return setErr(r.error || (action === "approve" ? "승인 실패" : "거절 실패"));
     }
     setChecked({});
     app.refresh();
@@ -48,24 +47,40 @@ function DepositApproval() {
 
   const ids = rows.map((r) => r.request_id);
   const picked = ids.filter((id) => checked[id]);
+  const allOn = ids.length > 0 && picked.length === ids.length;
+  // 위쪽 [승인][거절]: 체크한 것만 처리 (확인 팝업)
+  const askChecked = (a) => {
+    setWarn("");
+    if (!picked.length) return setWarn("체크된 승인 신청이 없습니다.");
+    setAskAll(a);
+  };
   return (
     <>
-      <Cols w={[4.0, 1.2, 1.2, 1.2, 1.2]} va="center">
+      <div className="dep-head">
         <H3>✅ 입금 승인(승인 대기 목록)</H3>
-        {rows.length ? <Btn onClick={() => process(picked, "approve", "checked")}>체크승인</Btn> : <span />}
-        {rows.length ? <Btn onClick={() => process(picked, "reject", "checked")}>체크거절</Btn> : <span />}
-        {rows.length ? <Btn onClick={() => setAskAll("approve")}>전체승인</Btn> : <span />}
-        {rows.length ? <Btn onClick={() => setAskAll("reject")}>전체거절</Btn> : <span />}
-      </Cols>
+        {rows.length ? (
+          <div className="dep-btns">
+            <Btn full={false} className="sm" onClick={() => setChecked(allOn ? {} : Object.fromEntries(ids.map((id) => [id, true])))}>
+              {allOn ? "⬜ 전체 체크 해제" : "☑️ 전체 체크"}
+            </Btn>
+            <Btn full={false} className="sm" onClick={() => askChecked("approve")}>
+              승인{picked.length ? ` (${picked.length})` : ""}
+            </Btn>
+            <Btn full={false} className="sm" onClick={() => askChecked("reject")}>
+              거절{picked.length ? ` (${picked.length})` : ""}
+            </Btn>
+          </div>
+        ) : null}
+      </div>
       <ConfirmModal
         open={!!askAll}
-        title={askAll === "approve" ? "✅ 전체 승인" : "🧾 전체 거절"}
-        message={`승인 대기 ${rows.length}건을 모두 ${askAll === "approve" ? "승인" : "거절"}할까요?`}
-        yesText={askAll === "approve" ? "전체 승인" : "전체 거절"}
+        title={askAll === "approve" ? "✅ 승인" : "🧾 거절"}
+        message={`체크한 ${picked.length}건을 ${askAll === "approve" ? "승인" : "거절"}할까요?`}
+        yesText={askAll === "approve" ? "승인" : "거절"}
         onYes={async () => {
           const a = askAll;
           setAskAll("");
-          await process(ids, a, "all");
+          await process(picked, a, "checked");
         }}
         onNo={() => setAskAll("")}
       />
@@ -73,8 +88,8 @@ function DepositApproval() {
       {warn ? <Warning>{warn}</Warning> : null}
       <ErrorBox>{err}</ErrorBox>
       {rows.length ? (
-        <>
-          <Cols w={W} va="center">
+        <div className="dep-grid">
+          <Cols w={W} va="center" className="dep-row dep-hdr">
             <b>체크</b>
             {hd("번호", "no")}
             {hd("이름", "name")}
@@ -85,21 +100,25 @@ function DepositApproval() {
             <b>승인여부</b>
           </Cols>
           {srt.sorted.map((r) => (
-            <Cols w={W} va="center" key={r.request_id}>
+            <Cols w={W} va="center" className="dep-row" key={r.request_id}>
               <Checkbox checked={!!checked[r.request_id]} onChange={(v) => setChecked((c) => ({ ...c, [r.request_id]: v }))} />
               <div>{r._no}</div>
-              <div>{r.name}</div>
+              <div className="dep-name">{r.name}</div>
               <div>{r.when}</div>
-              <div>{r.memo}</div>
-              <div>{r.amount}</div>
+              <div className="dep-memo">{r.memo}</div>
+              <div className="dep-num">{r.amount}</div>
               <div>{r.apply_treasury ? "O" : "X"}</div>
-              <Cols w={2}>
-                <Btn onClick={() => process([r.request_id], "approve", "single")}>승인</Btn>
-                <Btn onClick={() => process([r.request_id], "reject", "single")}>거절</Btn>
-              </Cols>
+              <div className="dep-act">
+                <Btn full={false} className="sm" onClick={() => process([r.request_id], "approve", "single")}>
+                  승인
+                </Btn>
+                <Btn full={false} className="sm" onClick={() => process([r.request_id], "reject", "single")}>
+                  거절
+                </Btn>
+              </div>
             </Cols>
           ))}
-        </>
+        </div>
       ) : null}
     </>
   );

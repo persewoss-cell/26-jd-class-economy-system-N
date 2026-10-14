@@ -115,7 +115,7 @@ export const Loading = ({ text = "불러오는 중..." }) => (
 const textOf = (c) => (typeof c === "string" || typeof c === "number" ? String(c) : Array.isArray(c) ? c.map(textOf).join("") : c && c.props ? textOf(c.props.children) : "");
 function toneOf(children) {
   const t = textOf(children);
-  if (/전체 해제|선택 해제|닫기|다시 검사|지급 안 함|취소|숫자 초기화|접기/.test(t)) return "";
+  if (/전체 해제|선택 해제|닫기|다시 검사|지급 안 함|취소|숫자 초기화|접기|전체 체크/.test(t)) return "";
   if (/삭제|회수|거절|초기화|해제|마감|중도해지|중도 해지|되돌리기|아니오/.test(t)) return "tone-danger";
   if (/저장|추가|승인|지급|개시|구입|제출|고용|부여|조회|반영|참여|추첨|생성|변경|로그인|예$|^예|투자하기|가입|적용|실행|등록/.test(t)) return "tone-main";
   return "";

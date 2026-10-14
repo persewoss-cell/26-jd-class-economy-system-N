@@ -494,3 +494,18 @@ table.ledger { border-collapse: separate; border-spacing: 0; font-size: 0.92rem;
 .msel-moves button { width: 1.9rem; height: 1.7rem; border: 1px solid var(--line); background: #fff; border-radius: 7px; font-size: 0.68rem; color: var(--muted); cursor: pointer; }
 .msel-moves button:hover:not(:disabled) { color: var(--mint-d); border-color: var(--mint); }
 .msel-moves button:disabled { opacity: 0.3; cursor: default; }
+
+/* 입금 승인 목록 */
+.btn.sm { min-height: 2.25rem; padding: 0.25rem 0.95rem; font-size: 0.88rem; border-radius: 10px; }
+.dep-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
+.dep-btns { display: flex; gap: 0.45rem; }
+.dep-grid { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: #fff; }
+.dep-grid .dep-row { padding: 0.35rem 0.8rem; border-bottom: 1px solid #f0f3f7; gap: 0.6rem; min-height: 3rem; }
+.dep-grid .dep-row:last-child { border-bottom: none; }
+.dep-grid .dep-row:not(.dep-hdr):hover { background: var(--mint-l); }
+.dep-grid .dep-hdr { background: #f7f9fc; color: #5a6578; font-size: 0.86rem; min-height: 2.6rem; }
+.dep-grid .dep-row > .col { text-align: center; display: flex; justify-content: center; align-items: center; min-width: 0; }
+.dep-grid .dep-memo, .dep-grid .dep-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dep-grid .dep-num { font-weight: 700; }
+.dep-grid .dep-act { display: flex; gap: 0.35rem; justify-content: center; }
+.dep-grid .dep-act .btn.sm { padding: 0.2rem 0.85rem; min-height: 2.05rem; }
