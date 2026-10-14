@@ -332,7 +332,7 @@ export default function App() {
           ) : (
             <div className="stack">
               {user.role === "student" ? <UserHeader onLogout={logout} onPin={() => setPop("pin")} /> : null}
-              <nav className="main-menu" role="radiogroup" aria-label="메인 메뉴">
+              <nav className={`main-menu ${tabs.keys.length > 14 ? "many" : ""}`} role="radiogroup" aria-label="메인 메뉴">
                 {tabs.keys.map((k) => {
                   const { icon, text, extra } = menuLabel(tabs.labels[k] || k);
                   return (
