@@ -120,9 +120,9 @@ function TabContent({ tab, user }) {
   const isAdmin = user.role === "admin";
   switch (tab) {
     case "🏦 내 통장":
-      return isAdmin ? <BankAdmin variant="admin" /> : <BankStudent />;
+      return isAdmin ? <BankAdmin /> : <BankStudent />;
     case "admin::🏦 내 통장":
-      return <BankAdmin variant="student" />;
+      return <BankAdmin />;
     case "🔎 개별조회":
       return <Individual />;
     case "💼 직업/월급":
@@ -136,7 +136,7 @@ function TabContent({ tab, user }) {
     case "🏦 은행(적금)":
       return <Savings adminMode={isAdmin} />;
     case "admin::🏦 은행(적금)":
-      return <Savings adminMode studentAdmin />;
+      return <Savings adminMode />;
     case "📈 투자":
       return <Invest adminMode={isAdmin} />;
     case "admin::📈 투자":

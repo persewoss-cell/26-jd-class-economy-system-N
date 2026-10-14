@@ -7,7 +7,7 @@ import {
 } from "../components/ui.jsx";
 import { TreasuryForm, useTreasuryForm, treasuryTemplateDisplay } from "../components/trade.jsx";
 
-function TreTemplates({ templates, writable, reload }) {
+function TreTemplates({ templates, reload }) {
   const app = useApp();
   const labels = ["(새로 추가)", ...templates.map((t) => `${t.order} | ${treasuryTemplateDisplay(t)}`)];
   const [pick, setPick] = useState("(새로 추가)");
@@ -43,16 +43,16 @@ function TreTemplates({ templates, writable, reload }) {
       <Select label="편집 대상" value={pick} options={labels} onChange={onPick} />
       <Cols w={[2.2, 1.2, 1.2, 1.0]}>
         <TextInput label="라벨(내역)" value={f.label} onChange={(v) => setF((x) => ({ ...x, label: v }))} />
-        <Select label="종류" value={f.kind} options={["세입", "세출"]} onChange={(v) => setF((x) => ({ ...x, kind: v }))} help="세입=income, 세출=expense (저장은 자동으로 처리됩니다)" />
+        <Select label="종류" value={f.kind} options={["세입", "세출"]} onChange={(v) => setF((x) => ({ ...x, kind: v }))} />
         <NumberInput label="금액" min={0} value={f.amount} onChange={(v) => setF((x) => ({ ...x, amount: v }))} />
         <NumberInput label="순서" min={1} value={f.order} onChange={(v) => setF((x) => ({ ...x, order: v }))} />
       </Cols>
       <Cols w={3}>
-        <Btn onClick={save} disabled={!writable}>
+        <Btn onClick={save}>
           ✅ 저장
         </Btn>
         <Btn onClick={() => onPick("(새로 추가)")}>🧹 입력 초기화</Btn>
-        <Btn onClick={del} disabled={!writable || !edit}>
+        <Btn onClick={del} disabled={!edit}>
           🗑️ 삭제
         </Btn>
       </Cols>
@@ -73,11 +73,9 @@ export default function Treasury() {
   const [bulkErr, setBulkErr] = useState("");
   if (error) return <ErrorBox>{error}</ErrorBox>;
   if (!data) return <Loading />;
-  const writable = data.writable;
 
   const save = async () => {
     setErr("");
-    if (!writable) return setErr("관리자 전용입니다.");
     const r = await api("treasury_add", { memo: form.memo.trim(), income: form.inc, expense: form.exp });
     if (r.ok) {
       reset();
@@ -113,7 +111,6 @@ export default function Treasury() {
   };
   const bulkSave = async () => {
     setBulkErr("");
-    if (!writable) return setBulkErr("관리자 전용입니다.");
     if (!bulk || !bulk.length) return setBulkErr("먼저 올바른 엑셀을 업로드하세요.");
     const r = await api("tre_tpl_bulk", { rows: bulk, overwrite });
     if (r.ok) {
@@ -136,7 +133,7 @@ export default function Treasury() {
       <H3>📝 세입/세출 내역 입력</H3>
       <TreasuryForm form={form} setForm={setForm} templates={data.templates} />
       <Cols w={[1.2, 1.0]} va="center">
-        <Btn onClick={save} disabled={!writable}>
+        <Btn onClick={save}>
           저장 (관리자, 국세청)
         </Btn>
         <Caption>※ 세입/세출 중 하나만 입력</Caption>
@@ -145,7 +142,7 @@ export default function Treasury() {
 
       <SectionDivider />
       <H3>🧩 국고 템플릿 추가/수정/삭제</H3>
-      <TreTemplates templates={data.templates} writable={writable} reload={reload} />
+      <TreTemplates templates={data.templates} reload={reload} />
 
       <H3>📥 국고 템플릿 엑셀로 일괄 추가</H3>
       <Cols w={2}>
@@ -186,7 +183,7 @@ export default function Treasury() {
         </>
       ) : null}
       <Checkbox label="저장 시 기존 국고 템플릿 리스트를 모두 삭제하고 새로 올린 엑셀로 덮어쓰기" checked={overwrite} onChange={setOverwrite} />
-      <Btn onClick={bulkSave} disabled={!writable}>
+      <Btn onClick={bulkSave}>
         ✅ 국고 템플릿 엑셀 내용 저장(반영)
       </Btn>
       <ErrorBox>{bulkErr}</ErrorBox>

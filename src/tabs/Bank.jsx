@@ -286,7 +286,7 @@ function TemplateManager({ templates, reload }) {
 }
 
 // ---------------- 관리자(또는 권한 학생) 화면 ----------------
-export function BankAdmin({ variant }) {
+export function BankAdmin() {
   const app = useApp();
   const [sub, setSub] = useState("개인");
   const tpls = useLoad("templates_list", {}, []);
@@ -314,8 +314,8 @@ export function BankAdmin({ variant }) {
     if (!memo.trim()) return setBErr("내역(메모)을 입력해 주세요.");
     const r = await api("bank_bulk", { memo: memo.trim(), dep, wd, treasury: bForm.treasury });
     if (r.ok) {
-      if (r.mode === "deposit") app.toast(variant === "admin" ? `일괄 지급 완료! (${r.count}명)` : `일괄 입금 완료! (${r.count}명)`, "🎉");
-      else app.toast(variant === "admin" ? `일괄 출금 완료! (적용 ${r.count}명)` : `출금 완료! (적용 ${r.count}명)`, "⚠️");
+      if (r.mode === "deposit") app.toast(`일괄 지급 완료! (${r.count}명)`, "🎉");
+      else app.toast(`일괄 출금 완료! (적용 ${r.count}명)`, "⚠️");
       bReset();
       app.refresh();
     } else setBErr(r.error || (dep > 0 ? "일괄 지급 실패" : "일괄 출금 실패"));
@@ -362,7 +362,6 @@ export function BankAdmin({ variant }) {
   return (
     <>
       <ConfirmModal open={askTreasury} title="🏛️ 국고 반영" message="국고에 반영할까요?" onYes={() => answerTreasury(true)} onNo={() => answerTreasury(false)} />
-      {variant === "student" ? <Subheader>💰입금/출금 적용</Subheader> : null}
       <SubTabs tabs={["개인", "전체"]} active={sub} onChange={setSub} />
       {sub === "전체" ? (
         <>
@@ -377,7 +376,7 @@ export function BankAdmin({ variant }) {
         </>
       ) : (
         <>
-          <H3>{variant === "admin" ? "👥 대상 학생 선택" : "👥 대상 학생 선택 (체크한 학생만 적용)"}</H3>
+          <H3>👥 대상 학생 선택</H3>
           {accounts.loading && !accounts.data ? <Loading /> : null}
           {accounts.data && !accs.length ? <Info>활성 계정이 없습니다.</Info> : null}
           {accs.length ? (

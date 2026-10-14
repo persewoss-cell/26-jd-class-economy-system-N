@@ -143,10 +143,8 @@ h1, h2, h3, h4 { margin: 0; line-height: 1.25; }
   min-height: 2.2rem; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; user-select: none; gap: 0.4rem;
   touch-action: manipulation; transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
-.radio .opt .dot { width: 0.85rem; height: 0.85rem; border-radius: 50%; border: 1.5px solid #a3a6af; background: #fff; flex: 0 0 auto; }
 .radio .opt:hover { border-color: var(--sel); }
 .radio .opt.on { background: var(--sel); border-color: var(--sel-dark); color: #fff; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
-.radio .opt.on .dot { display: none; }
 .radio.disabled .opt { cursor: default; opacity: 0.85; }
 
 /* 빠른 금액(원형) */

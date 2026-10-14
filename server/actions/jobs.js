@@ -6,7 +6,7 @@ import {
 } from "../core.js";
 import { str, toInt, ior, forr, toDate, monthKey, kstParts } from "../../shared/format.js";
 
-const JOBS = ["tab::💼 직업/월급"];
+const JOBS = ["tab::💼 직업/월급", "jobs_write"];
 
 async function payrollCfg(db) {
   const d = await col(db, "config").get("salary_payroll");

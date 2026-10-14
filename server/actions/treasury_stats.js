@@ -1,14 +1,16 @@
 // 🏛️ 국세청(국고) + 📊 통계청 + 💳 신용등급
 import { col, newId, encKey } from "../db.js";
-import { fail, requireLogin, requireAny, requireAdmin, isAdminPin, adminRecorder, can, hasTab } from "../auth.js";
+import { fail, requireLogin, requireAny, isAdminPin, adminRecorder } from "../auth.js";
 import {
   treasuryTx, getCreditCfg, listStatSubmissions, manualDeltaMap, calcCredit, activeStudents,
 } from "../core.js";
 import { str, toInt, ior, toDate, fmtKrDatetime, fmtKrDatetimeNoYear, fmtMd, kstTodayIso, scoreToGrade } from "../../shared/format.js";
 
-const TRE_WRITE = ["tab::🏛️ 국세청(국고)"];
+// 탭이 보이는 학생은 관리자와 똑같이 사용 (보기 권한 = 쓰기 권한)
 const TRE_VIEW = ["tab::🏛️ 국세청(국고)", "treasury_read", "treasury_write"];
-const STATS = ["tab::📊 통계청"];
+const TRE_WRITE = TRE_VIEW;
+const STATS = ["tab::📊 통계청", "stats_write"];
+const CREDIT = ["tab::💳 신용등급", "credit_write"];
 
 async function listTreasuryTemplates(db) {
   const docs = await col(db, "treasury_templates").find({});
@@ -75,7 +77,7 @@ export default {
       "날짜-시간": x.created_at ? fmtKrDatetime(x.created_at) : "",
       기록자: str(x.recorder),
     }));
-    return { balance: toInt(st.balance), rows, templates: await listTreasuryTemplates(db), writable: ctx.isAdmin || hasTab(ctx, "🏛️ 국세청(국고)") };
+    return { balance: toInt(st.balance), rows, templates: await listTreasuryTemplates(db) };
   },
 
   async treasury_add(ctx, { memo, income, expense }) {
@@ -210,18 +212,16 @@ export default {
   async credit_load(ctx) {
     requireLogin(ctx);
     const db = ctx.db;
-    const access = ctx.isAdmin || hasTab(ctx, "💳 신용등급");
-    if (!access && !can(ctx, "credit_write")) fail("접근 권한이 없습니다.");
+    requireAny(ctx, CREDIT, "접근 권한이 없습니다.");
     const cfg = await getCreditCfg(db);
-    const out = { cfg, access };
-    if (!access) return out;
+    const out = { cfg };
     const studs = await stuRows(db);
     const subs = await listStatSubmissions(db, 60);
     const md = await manualDeltaMap(db);
     out.students = studs;
     out.subs = subs.map(subForClient);
     out.manual = Object.fromEntries(studs.map((s) => [s.student_id, toInt(md[s.student_id])]));
-    if (ctx.isAdmin) {
+    {
       const adj = await db.collection("credit_adjustments").find({}).sort({ created_at: -1 }).limit(300).toArray();
       out.adjustments = adj.map((r) => ({
         일시: r.created_at ? fmtKrDatetimeNoYear(r.created_at) : "",
@@ -235,14 +235,14 @@ export default {
 
   async credit_cfg_save(ctx, { base, o, x, tri }) {
     requireLogin(ctx);
-    if (!(ctx.isAdmin || hasTab(ctx, "💳 신용등급") || can(ctx, "credit_write"))) fail("접근 권한이 없습니다.");
+    requireAny(ctx, CREDIT, "접근 권한이 없습니다.");
     const pick = (v, d) => (v === null || v === undefined || v === "" ? d : toInt(v, d));
     await col(ctx.db, "config").set("credit_scoring", { base: pick(base, 50), o: pick(o, 1), x: pick(x, -3), tri: pick(tri, 0), updated_at: new Date() }, true);
     return {};
   },
 
   async credit_adjust(ctx, { student_id, sign, pts }) {
-    requireAdmin(ctx);
+    requireAny(ctx, CREDIT, "접근 권한이 없습니다.");
     const db = ctx.db;
     const s = await col(db, "students").get(student_id);
     if (!s) fail("학생을 찾지 못했어요.");
@@ -255,7 +255,7 @@ export default {
     const g = scoreToGrade(after);
     await col(db, "credit_adjustments").add({
       student_id: String(student_id), student_no: toInt(s.no), student_name: str(s.name), delta: signed,
-      score_before: before.score, score_after: after, grade_after: g, recorder: "관리자", created_at: new Date(),
+      score_before: before.score, score_after: after, grade_after: g, recorder: adminRecorder(ctx), created_at: new Date(),
     });
     await col(db, "students").set(String(student_id), { credit_score: after, credit_grade: g, updated_at: new Date() }, true);
     return { signed };

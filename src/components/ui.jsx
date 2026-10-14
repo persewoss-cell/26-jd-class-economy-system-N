@@ -292,7 +292,6 @@ export function Radio({ label, options, value, onChange, hideLabel, disabled }) 
           const on = String(o) === String(value);
           return (
             <div key={o} className={`opt ${on ? "on" : ""}`} onClick={() => !disabled && onChange && onChange(o)}>
-              <span className="dot" />
               {o}
             </div>
           );

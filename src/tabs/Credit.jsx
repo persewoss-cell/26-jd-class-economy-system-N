@@ -100,10 +100,9 @@ export default function Credit() {
   const [page, setPage] = useState(1);
   if (error) return <Info>{error}</Info>;
   if (!data) return <Loading />;
-  const { cfg, access } = data;
+  const { cfg } = data;
   const students = data.students || [];
   const subs = data.subs || [];
-  const isAdmin = app.user && app.user.role === "admin";
 
   // 누적 점수 (과거→최신)
   const scoresBy = {};
@@ -133,12 +132,11 @@ export default function Credit() {
 
   return (
     <>
-      {!access ? <Info>접근 권한이 없습니다.</Info> : null}
-      {access && !students.length ? <Info>활성화된 학생(계정)이 없습니다.</Info> : null}
+      {!students.length ? <Info>활성화된 학생(계정)이 없습니다.</Info> : null}
       <H3>📏 신용등급 점수 설정</H3>
       <CfgBox cfg={cfg} onSaved={reload} />
-      {access && students.length && !subs.length ? <Info>통계청 제출물 내역이 없습니다. 먼저 통계청 탭에서 제출물을 추가하세요.</Info> : null}
-      {access && students.length && subs.length ? (
+      {students.length > 0 && !subs.length ? <Info>통계청 제출물 내역이 없습니다. 먼저 통계청 탭에서 제출물을 추가하세요.</Info> : null}
+      {students.length > 0 && subs.length > 0 ? (
         <>
           <H3>🌟 신용등급 관리 장부</H3>
           <PageNav page={p} total={total} onPage={(x) => setPage(Math.max(1, Math.min(total, x)))} />
@@ -188,14 +186,10 @@ export default function Credit() {
           <CreditBand />
         </>
       ) : null}
-      {isAdmin ? (
-        <>
-          <H3>✍️ 신용점수 수동 조정</H3>
-          {!students.length ? <Info>활성 학생이 없어 신용점수 수동 조정을 할 수 없습니다.</Info> : <ManualAdjust students={students} onSaved={() => app.refresh()} />}
-          <H3>📒 신용점수 조정 장부</H3>
-          {(data.adjustments || []).length ? <DataTable rows={data.adjustments} columns={["일시", "대상", "점수기록", "기록자"]} csvName="신용조정장부" /> : <Info>아직 수동 조정 장부가 없습니다.</Info>}
-        </>
-      ) : null}
+      <H3>✍️ 신용점수 수동 조정</H3>
+      {!students.length ? <Info>활성 학생이 없어 신용점수 수동 조정을 할 수 없습니다.</Info> : <ManualAdjust students={students} onSaved={() => app.refresh()} />}
+      <H3>📒 신용점수 조정 장부</H3>
+      {(data.adjustments || []).length ? <DataTable rows={data.adjustments} columns={["일시", "대상", "점수기록", "기록자"]} csvName="신용조정장부" /> : <Info>아직 수동 조정 장부가 없습니다.</Info>}
     </>
   );
 }

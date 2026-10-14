@@ -9,7 +9,6 @@ export default function Logs() {
   const app = useApp();
   const isAdmin = app.user && app.user.role === "admin";
   const allowed = isAdmin || (app.user && (app.user.perms || []).includes("tab::🧾 로그기록"));
-  const [requested, setRequested] = useState(false);
   const [maxRows, setMaxRows] = useState(200);
   const [rows, setRows] = useState(null);
   const [kw, setKw] = useState("");
@@ -25,9 +24,9 @@ export default function Logs() {
     else setErr(r.error);
   };
   useEffect(() => {
-    if (requested) load(maxRows);
+    if (allowed) load(maxRows);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requested, maxRows]);
+  }, [maxRows]);
 
   if (!allowed) return <Info>이 탭은 관리자 전용입니다.</Info>;
   const k = kw.trim().toLowerCase();
@@ -37,40 +36,17 @@ export default function Logs() {
     <>
       <H3>🧾 통합 로그기록</H3>
       <Caption>모든 탭의 변경 이력을 분리 없이 하나의 표로 통합해 보여줍니다.</Caption>
-      {!requested ? (
+      <Btn onClick={() => load(maxRows)}>로그 새로고침</Btn>
+      <NumberInput label="표시 행 수" min={100} max={10000} step={100} value={maxRows} onChange={setMaxRows} />
+      <ErrorBox>{err}</ErrorBox>
+      {loading && !rows ? <Loading /> : null}
+      {rows && !rows.length ? <Info>표시할 로그가 없습니다.</Info> : null}
+      {rows && rows.length ? (
         <>
-          <Info>로그인 직후 속도 개선을 위해 로그는 필요할 때만 불러옵니다.</Info>
-          <Btn
-            onClick={() => {
-              setRequested(true);
-              app.toast("로그 데이터를 불러왔습니다.", "📚");
-            }}
-          >
-            로그 데이터 불러오기
-          </Btn>
+          <TextInput label="검색(탭/내역/기록자/대상)" value={kw} onChange={setKw} />
+          <DataTable rows={view} columns={COLS} csvName="통합로그" />
         </>
-      ) : (
-        <>
-          <Btn
-            onClick={async () => {
-              await load(maxRows);
-              app.toast("로그를 새로고침합니다.", "🔄");
-            }}
-          >
-            로그 새로고침
-          </Btn>
-          <NumberInput label="표시 행 수" min={100} max={10000} step={100} value={maxRows} onChange={setMaxRows} />
-          <ErrorBox>{err}</ErrorBox>
-          {loading && !rows ? <Loading /> : null}
-          {rows && !rows.length ? <Info>표시할 로그가 없습니다.</Info> : null}
-          {rows && rows.length ? (
-            <>
-              <TextInput label="검색(탭/내역/기록자/대상)" value={kw} onChange={setKw} />
-              <DataTable rows={view} columns={COLS} csvName="통합로그" />
-            </>
-          ) : null}
-        </>
-      )}
+      ) : null}
     </>
   );
 }

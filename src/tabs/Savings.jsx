@@ -220,9 +220,8 @@ function StudentPart({ data }) {
   );
 }
 
-export default function Savings({ adminMode, studentAdmin }) {
+export default function Savings({ adminMode }) {
   const app = useApp();
-  const isAdmin = app.user && app.user.role === "admin";
   const { data, error, reload } = useLoad("bank_load", { admin_mode: !!adminMode }, [adminMode, app.ver]);
   const toasted = useRef(false);
   useEffect(() => {
@@ -233,14 +232,13 @@ export default function Savings({ adminMode, studentAdmin }) {
   }, [data, app]);
   return (
     <>
-      {studentAdmin && isAdmin ? <Info>관리자 모드에서는 상단 '🏦 은행(적금)' 탭에서 사용합니다.</Info> : null}
       {adminMode ? <DepositApproval /> : null}
       {error ? <ErrorBox>{error}</ErrorBox> : null}
       {!data && !error ? <Loading /> : null}
       {data ? (
         <>
           {adminMode ? <AdminPart data={data} reload={reload} /> : <StudentPart data={data} />}
-          {!(studentAdmin && !isAdmin) ? <RateTable cfg={data.rate_cfg} /> : null}
+          <RateTable cfg={data.rate_cfg} />
         </>
       ) : null}
     </>
