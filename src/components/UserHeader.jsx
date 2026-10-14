@@ -22,8 +22,8 @@ export default function UserHeader({ onLogout, onPin }) {
           {app.user && app.user.name}
           <small> 님</small>
         </div>
-        <div className="sum-label">🧮 총 자산</div>
         <div className="sum-value">
+          <span className="sum-label">🧮 총 자산</span>
           {h.asset_total}
           <small> 드림</small>
         </div>

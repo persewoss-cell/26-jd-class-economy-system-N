@@ -2,10 +2,10 @@
 import { col, newId } from "../db.js";
 import { fail, requireLogin, requireAny, requireStudent, isAdminPin, adminRecorder } from "../auth.js";
 import {
-  adminTx, studentTx, treasuryApply, applyBalance, insertTx, getTxRows, isSavingsMemo, isInvestMemo,
+  adminTx, studentTx, treasuryApply, applyBalance, insertTx, getTxRows, isSavingsMemo, isInvestMemo, removeTx, removeTreasuryEntry,
   listAccounts, activeStudents,
 } from "../core.js";
-import { str, toInt, ior, toDate, fmtMmDd, fmtMd, fmtKrDatetimeNoYear } from "../../shared/format.js";
+import { str, toInt, ior, toDate, fmtMd, fmtKrDatetimeNoYear } from "../../shared/format.js";
 
 const BANK_ADMIN = ["admin::🏦 내 통장"];
 const SAV_ADMIN = ["admin::🏦 은행(적금)"];
@@ -70,57 +70,6 @@ function canRollbackRow(r, blockInvest) {
   return true;
 }
 
-// api_admin_rollback_selected
-async function rollbackSelected(db, ctx, sid, txIds) {
-  if (!sid || !txIds || !txIds.length) fail("되돌릴 항목이 없습니다.");
-  const txDocs = [];
-  for (const tid of txIds) {
-    const tx = await col(db, "transactions").get(tid);
-    if (!tx || str(tx.student_id) !== String(sid)) continue;
-    txDocs.push(tx);
-  }
-  if (!txDocs.length) fail("유효한 거래를 찾지 못했습니다.");
-  const blocked = [];
-  const valid = [];
-  for (const tx of txDocs) {
-    const t = str(tx.type);
-    const memo = str(tx.memo);
-    if (t === "rollback") { blocked.push(tx); continue; }
-    if (isSavingsMemo(memo) || t === "maturity") { blocked.push(tx); continue; }
-    if (isInvestMemo(memo)) { blocked.push(tx); continue; }
-    const already = await db.collection("transactions").findOne({ student_id: String(sid), type: "rollback", related_tx: String(tx._id) });
-    if (already) { blocked.push(tx); continue; }
-    valid.push(tx);
-  }
-  if (!valid.length) {
-    let msg = "선택한 항목이 모두 되돌리기 불가합니다.";
-    if (blocked.length) msg += " (예: 적금/이미 되돌림)";
-    fail(msg);
-  }
-  valid.sort((a, b) => (toDate(a.created_at)?.getTime() || 0) - (toDate(b.created_at)?.getTime() || 0));
-  let undone = 0;
-  let delta = 0;
-  const recorder = adminRecorder(ctx);
-  for (const tx of valid) {
-    const amount = toInt(tx.amount);
-    const rb = -amount;
-    const origMemo = str(tx.memo).trim();
-    const rbMemo = `${origMemo || "내역"}(${fmtMmDd(tx.created_at)}) 되돌리기`;
-    const origTre = toInt(tx.treasury_signed);
-    if (origTre !== 0) {
-      await treasuryApply(db, { memo: rbMemo, signed: -origTre, actor: "rollback", recorder });
-    }
-    const doc = await applyBalance(db, sid, rb);
-    await insertTx(db, {
-      sid, type: "rollback", amount: rb, balanceAfter: toInt(doc && doc.balance), memo: rbMemo, recorder,
-      extra: { apply_treasury: origTre !== 0, treasury_signed: -origTre, treasury_memo: rbMemo, related_tx: String(tx._id) },
-    });
-    undone += 1;
-    delta += rb;
-  }
-  const message = blocked.length ? `되돌리기 제외 ${blocked.length}건(적금/이미 되돌림 등)은 건너뛰었습니다.` : null;
-  return { undone, delta, message };
-}
 
 // 입금 신청 승인/거절
 async function approveDeposit(db, ctx, rid) {
@@ -176,23 +125,6 @@ function isLegacyAdminTx(tx) {
   return !(SYSTEM_MEMO.test(memo) || isSavingsMemo(memo) || isInvestMemo(memo));
 }
 
-// 지운 기록 뒤에 쌓인 "총액(잔액)" 값을 지운 금액만큼 당겨서 내역이 어긋나지 않게
-async function removeTx(db, tx) {
-  const r = await db.collection("transactions").deleteOne({ _id: String(tx._id) });
-  if (!r.deletedCount) return false;
-  const amount = toInt(tx.amount);
-  await applyBalance(db, tx.student_id, -amount);
-  await db.collection("transactions").updateMany({ student_id: str(tx.student_id), created_at: { $gt: tx.created_at } }, { $inc: { balance_after: -amount } });
-  return true;
-}
-async function removeTreasuryEntry(db, led) {
-  const r = await db.collection("treasury_ledger").deleteOne({ _id: led._id });
-  if (!r.deletedCount) return false;
-  const signed = toInt(led.amount);
-  await db.collection("treasury").updateOne({ _id: "state" }, { $inc: { balance: -signed }, $set: { updated_at: new Date() } }, { upsert: true });
-  await db.collection("treasury_ledger").updateMany({ created_at: { $gt: led.created_at } }, { $inc: { balance_after: -signed } });
-  return true;
-}
 // 예전 기록: 같은 시각(±10초)·같은 금액·같은 내역으로 남은 국고 기록을 찾아 함께 지움
 async function findLegacyTreasury(db, tx) {
   const t = toDate(tx.created_at);
@@ -366,11 +298,6 @@ export default {
     return { ok_cnt: okCnt, mode: isDeposit ? "deposit" : "withdraw" };
   },
 
-  async rollback(ctx, { admin_pin, sid, tx_ids }) {
-    requireLogin(ctx);
-    if (!isAdminPin(admin_pin)) fail("관리자 PIN이 틀립니다.");
-    return await rollbackSelected(ctx.db, ctx, String(sid || ctx.sid), (tx_ids || []).map(String));
-  },
 
   async template_save(ctx, args) {
     requireAny(ctx, BANK_ADMIN);

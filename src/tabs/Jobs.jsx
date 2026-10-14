@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
 import { readExcel, downloadExcel } from "../lib/excel.js";
-import { useApp, useLoad, Cols, H3, H4, Subheader, Caption, Btn, TextInput, Select, MultiSelect, NumberInput, Checkbox, Metric, Info, Warning, ErrorBox, Success, Expander, DataTable, Loading, ConfirmModal, ExcelBar, TplEditor } from "../components/ui.jsx";
+import { useApp, useLoad, Cols, H3, H4, Subheader, Caption, Btn, TextInput, Select, MultiSelect, NumberInput, Checkbox, Metric, Info, Warning, ErrorBox, Success, Expander, DataTable, Loading, ConfirmModal, ExcelBar, TplEditor, Popup } from "../components/ui.jsx";
 
 function calcNet(gross, cfg) {
   gross = parseInt(gross, 10) || 0;
@@ -38,6 +38,39 @@ function DeductionCfg({ cfg, onSaved }) {
         <Btn onClick={save}>✅ 공제 설정 저장</Btn>
       </Cols>
     </Expander>
+  );
+}
+
+// 이번 달 월급을 전부 회수한 뒤(지급일이 지난 경우): 다시 지급할 날을 정하는 팝업
+function RepayPrompt({ repay }) {
+  const app = useApp();
+  const today = new Date(Date.now() + 9 * 3600 * 1000).getUTCDate();
+  const [closed, setClosed] = useState(false);
+  const [day, setDay] = useState(Math.min(31, today + 1));
+  const [err, setErr] = useState("");
+  const send = async (skip) => {
+    setErr("");
+    const r = await api("payroll_repay_set", { day, skip });
+    if (!r.ok) return setErr(r.error || "저장 실패");
+    app.toast(skip ? "이번 달은 자동지급하지 않아요" : r.day <= today ? "오늘 다시 지급했어요" : `${r.day}일에 다시 자동지급해요`, "📅");
+    app.refresh();
+  };
+  return (
+    <>
+      {repay && !repay.pending ? (
+        <Info>{repay.day ? `📅 이번 달 월급은 ${repay.day}일에 다시 자동지급돼요.` : "📅 이번 달은 월급을 자동지급하지 않아요. (필요하면 수동지급을 눌러 주세요)"}</Info>
+      ) : null}
+      <Popup open={!!(repay && repay.pending) && !closed} title="📅 이번 달 월급을 모두 회수했어요" onClose={() => setClosed(true)}>
+        <div>지급일이 지난 뒤 월급이 전부 회수되어, 자동지급을 잠시 멈췄어요. 이번 달에 다시 지급할 날을 정해 주세요.</div>
+        <Cols w={[1, 1.3, 1.3]} va="bottom">
+          <NumberInput label="다시 지급할 날 (일)" min={today} max={31} value={day} onChange={setDay} />
+          <Btn onClick={() => send(false)}>📅 이 날 다시 지급</Btn>
+          <Btn onClick={() => send(true)}>이번 달은 지급 안 함</Btn>
+        </Cols>
+        <div className="caption">오늘 날짜를 고르면 바로 다시 지급돼요. 직업을 고친 뒤 [수동지급]으로 바로 줄 수도 있어요.</div>
+        <ErrorBox>{err}</ErrorBox>
+      </Popup>
+    </>
   );
 }
 
@@ -98,7 +131,7 @@ function PayrollBox({ data, reload }) {
     }
     if (r.fixed > 0) {
       app.toast(
-        fixMode === "all" ? `이번달 월급 회수 완료: 학생회수 ${r.fixed}건 / 국고정정 ${r.treasury_fixed}건` : `중복 월급 정정 완료: 학생회수 ${r.fixed}건 / 국고정정 ${r.treasury_fixed}건`,
+        fixMode === "all" ? `이번달 월급 회수 완료: ${r.fixed}건 기록 삭제 (국고 공제 ${r.treasury_fixed}건 함께 삭제)` : `중복 월급 회수 완료: ${r.fixed}건 기록 삭제 (국고 공제 ${r.treasury_fixed}건 함께 삭제)`,
         fixMode === "all" ? "🗑️" : "♻️"
       );
     }
@@ -380,6 +413,7 @@ export default function Jobs() {
       {!data && !error ? <Loading /> : null}
       {data ? (
         <>
+          <RepayPrompt repay={data.payroll.repay} />
           <DeductionCfg cfg={data.cfg} onSaved={reload} />
           <PayrollBox data={data} reload={reload} />
           <JobAssign data={data} reload={reload} />

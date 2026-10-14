@@ -391,6 +391,48 @@ export async function listAccounts(db) {
 // 시스템 자동 처리(적금 만기 + 월급 자동지급) — 로그인 여부와 관계없이 접속할 때마다 시도
 // -------------------------------------------------
 let _lastAutoRun = 0;
+// ---------------- 되돌리기 = 기록 자체를 지우고 원래대로 ----------------
+// 지운 기록 뒤에 쌓인 "총액(잔액)" 값을 지운 금액만큼 당겨서 내역이 어긋나지 않게
+export async function removeTx(db, tx) {
+  const r = await db.collection("transactions").deleteOne({ _id: String(tx._id) });
+  if (!r.deletedCount) return false;
+  const amount = toInt(tx.amount);
+  await applyBalance(db, tx.student_id, -amount);
+  await db.collection("transactions").updateMany({ student_id: str(tx.student_id), created_at: { $gt: tx.created_at } }, { $inc: { balance_after: -amount } });
+  return true;
+}
+export async function removeTreasuryEntry(db, led) {
+  const r = await db.collection("treasury_ledger").deleteOne({ _id: led._id });
+  if (!r.deletedCount) return false;
+  const signed = toInt(led.amount);
+  await db.collection("treasury").updateOne({ _id: "state" }, { $inc: { balance: -signed }, $set: { updated_at: new Date() } }, { upsert: true });
+  await db.collection("treasury_ledger").updateMany({ created_at: { $gt: led.created_at } }, { $inc: { balance_after: -signed } });
+  return true;
+}
+// 월급 입금 기록에 딸린 "월급 공제 세입" 국고 기록 (같은 달·직업·이름, 가장 가까운 시각)
+export async function findSalaryTreasury(db, tx, name) {
+  const t = toDate(tx.created_at);
+  if (!t) return null;
+  const job = str(tx.memo).replace("월급 ", "").trim();
+  const memo = `월급 공제 세입(${monthKey(t)}) ${job}` + (name ? ` - ${name}` : "");
+  const cands = await db.collection("treasury_ledger").find({ memo, amount: { $gt: 0 }, created_at: { $gte: new Date(t.getTime() - 180000), $lte: new Date(t.getTime() + 180000) } }).toArray();
+  if (!cands.length) return null;
+  cands.sort((a, b) => Math.abs(toDate(a.created_at) - t) - Math.abs(toDate(b.created_at) - t));
+  return cands[0];
+}
+// 월급 한 건을 흔적 없이 지움: 학생 기록 + 국고 공제 세입 (+ 원하면 그 달 지급 기록)
+export async function removeSalaryPayment(db, tx, name, { dropPaylog = false } = {}) {
+  const led = await findSalaryTreasury(db, tx, name);
+  if (!(await removeTx(db, tx))) return { removed: false, treasury: false };
+  const treasury = led ? await removeTreasuryEntry(db, led) : false;
+  if (dropPaylog) {
+    const mkey = monthKey(toDate(tx.created_at) || new Date());
+    const job = str(tx.memo).replace("월급 ", "").trim();
+    await db.collection("payroll_log").deleteMany({ month: mkey, student_id: str(tx.student_id), job });
+  }
+  return { removed: true, treasury };
+}
+
 export async function runAutoPayouts(db, { force = false } = {}) {
   const now = Date.now();
   if (!force && now - _lastAutoRun < 60000) return;
@@ -421,7 +463,13 @@ export async function runAutoPayouts(db, { force = false } = {}) {
     const kp = kstParts(nowD);
     if (!(autoEnabled && kp.day >= payDay)) return;
     const mkey = monthKey(nowD);
-    const lockId = `${mkey}_${String(payDay).padStart(2, "0")}`;
+    let lockId = `${mkey}_${String(payDay).padStart(2, "0")}`;
+    // 이번 달 월급을 전체 회수한 뒤: 관리자가 정한 '다시 지급일'이 되어야 자동지급
+    if (pc.hold_month === mkey) {
+      const re = pc.repay && pc.repay.month === mkey ? ior(pc.repay.day, 0) : 0;
+      if (!re || kp.day < re) return;
+      lockId = `${mkey}_re${String(re).padStart(2, "0")}`;
+    }
     const created = await col(db, "payroll_auto_run").create(lockId, { month: mkey, pay_day: payDay, run_at: new Date(), source: "auto_system" });
     if (!created) return;
     const cfg = await getSalaryCfg(db);

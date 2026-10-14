@@ -3,10 +3,10 @@ import { col } from "../db.js";
 import { fail, requireAny, isAdminPin } from "../auth.js";
 import {
   activeStudents, loadRoleLookup, roleNameFor, loadInvestProductMap, investSummaries, getCreditCfg,
-  listStatSubmissions, manualDeltaMap, calcCreditFrom, applyBalance, isSavingsMemo, isInvestMemo,
-  getSalaryCfg, calcNet, treasuryApply,
+  listStatSubmissions, manualDeltaMap, calcCreditFrom, isSavingsMemo, isInvestMemo,
+  removeTx, removeSalaryPayment,
 } from "../core.js";
-import { str, toInt, kstParts, pad2 } from "../../shared/format.js";
+import { str, toInt } from "../../shared/format.js";
 
 const IND = ["tab::🔎 개별조회"];
 
@@ -100,52 +100,27 @@ export default {
       if (blocked.length) msg += " (적금/투자/되돌리기 관련 내역은 삭제할 수 없어요)";
       fail(msg);
     }
-    const jobDed = {};
-    try {
-      const cfg = await getSalaryCfg(db);
-      for (const j of await col(db, "job_salary").find({})) {
-        const jn = str(j.job);
-        const gross = toInt(j.salary);
-        if (jn && !(jn in jobDed)) jobDed[jn] = Math.max(0, gross - calcNet(gross, cfg));
-      }
-    } catch {
-      /* ignore */
-    }
     const stu = await col(db, "students").get(sid);
     const studentName = str(stu && stu.name);
-    const kp = kstParts(new Date());
-    const delTag = `${pad2(kp.month)}.${pad2(kp.day)}.`;
     let deleted = 0;
     let treReversed = 0;
     const errors = [];
+    // 기록 자체를 지우고 원래대로: 월급 입금이면 그때 들어간 국고 '공제 세입' 기록도 같이 지움 (새 '환급' 기록 없음)
     for (const tx of valid) {
-      const amount = toInt(tx.amount);
       const memo = str(tx.memo).trim();
-      const t = str(tx.type);
+      const isSalary = str(tx.type) === "deposit" && toInt(tx.amount) > 0 && memo.startsWith("월급 ") && !memo.includes("(자동중복정정") && !memo.includes("(전체회수");
       try {
-        const r = await db.collection("transactions").deleteOne({ _id: String(tx._id) });
-        if (!r.deletedCount) throw new Error("이미 삭제됨");
-        await applyBalance(db, sid, -amount);
-        deleted += 1;
-      } catch (e) {
-        errors.push(`[삭제실패] tx=${tx._id} memo=${memo} err=${e.message || e}`);
-        continue;
-      }
-      const isCorr = memo.includes("(자동중복정정") || memo.includes("(전체회수");
-      if (t === "deposit" && amount > 0 && memo.startsWith("월급 ") && !isCorr) {
-        const jobName = memo.replace("월급 ", "").trim();
-        const ded = toInt(jobDed[jobName]);
-        if (ded > 0) {
-          try {
-            await treasuryApply(db, {
-              memo: `월급 공제 세입 환급(항목삭제 ${delTag}) ${jobName}` + (studentName ? ` - ${studentName}` : ""),
-              signed: -ded, actor: "admin_delete_tx", recorder: "관리자",
-            });
-            treReversed += 1;
-          } catch (e) {
-            errors.push(`[국고환급실패] tx=${tx._id} job=${jobName} err=${e.message || e}`);
-          }
+        if (isSalary) {
+          const r = await removeSalaryPayment(db, tx, studentName, { dropPaylog: true });
+          if (!r.removed) throw new Error("이미 삭제됨");
+          deleted += 1;
+          if (r.treasury) treReversed += 1;
+        } else {
+          if (!(await removeTx(db, tx))) throw new Error("이미 삭제됨");
+          deleted += 1;
         }
+      } catch (e) {
+        errors.push(`[삭제실패] ${memo}: ${e.message || e}`);
       }
     }
     const message = blocked.length ? `삭제 제외 ${blocked.length}건(적금/투자/되돌리기 관련 내역)은 건너뛰었습니다.` : null;

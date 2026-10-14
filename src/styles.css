@@ -471,3 +471,5 @@ table.ledger { border-collapse: separate; border-spacing: 0; font-size: 0.92rem;
 .modal.confirm-wide { width: min(520px, 100%); }
 .modal-msg { white-space: pre-line; }
 .check-list { display: flex; flex-direction: column; gap: 0.2rem; max-height: 300px; overflow: auto; padding: 0.4rem 0.6rem; background: var(--field); border-radius: var(--radius-s); }
+.sum-value { display: flex; align-items: baseline; justify-content: center; gap: 0.35rem; margin-top: 0.2rem; }
+.sum-value .sum-label { margin: 0 0.25rem 0 0; font-size: 0.95rem; font-weight: 700; }
