@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, getToken, setToken, remember, onBusy } from "./lib/api.js";
-import { AppCtx, Cols, TextInput, Checkbox, Btn, ErrorBox, Subheader, Toasts, Loading, useLoad, Info, prefetch, clearLoadCache } from "./components/ui.jsx";
+import { AppCtx, Cols, TextInput, Checkbox, Btn, ErrorBox, Toasts, Loading, useLoad, Info, prefetch, clearLoadCache } from "./components/ui.jsx";
 import Sidebar from "./components/Sidebar.jsx";
 import UserHeader from "./components/UserHeader.jsx";
 import { BankAdmin, BankStudent } from "./tabs/Bank.jsx";
@@ -20,7 +20,21 @@ import Logs from "./tabs/Logs.jsx";
 import UserStatsCredit from "./tabs/UserStatsCredit.jsx";
 import Goal from "./tabs/Goal.jsx";
 
-const APP_TITLE = "🏫학급 경제 시스템🪙";
+
+// 메뉴에 보이는 아이콘만 더 귀엽게 (권한 이름·저장 값은 그대로)
+const ICON_SWAP = { "🔎": "🔍", "🏦": "🐷", "⭐": "🔑", "🏷️": "🔨", "🧾": "📜", "📝": "📒" };
+function menuLabel(label) {
+  let extra = false;
+  let s = String(label || "");
+  if (s.startsWith("⍟")) {
+    extra = true;
+    s = s.slice(1);
+  }
+  const m = s.match(/^(\p{Extended_Pictographic}\uFE0F?)\s*(.*)$/u);
+  const icon = m ? ICON_SWAP[m[1]] || m[1] : "";
+  const text = m ? m[2] : s;
+  return { icon, text, extra };
+}
 
 // 탭별로 화면이 처음 불러오는 데이터 (로그인 직후 미리 불러 두면 탭을 누를 때 바로 뜸)
 const TAB_LOADS = {
@@ -124,7 +138,7 @@ function LoginForm({ onLogin }) {
     onLogin(r.token, r.user.role === "admin" ? ["관리자 모드 ON", "🔓"] : ["로그인 완료!", "✅"]);
   };
   return (
-    <div className="stack">
+    <div className="stack login-form">
       <Cols w={[1, 1]}>
         <TextInput label="이름" value={name} onChange={setName} onEnter={submit} autoComplete="username" />
         <TextInput label="비밀번호" type="password" value={pin} onChange={setPin} onEnter={submit} autoComplete="current-password" />
@@ -133,7 +147,7 @@ function LoginForm({ onLogin }) {
         <Checkbox label="아이디 기억하기" checked={rn} onChange={setRn} />
         <Checkbox label="비밀번호 기억하기" checked={rp} onChange={setRp} />
       </Cols>
-      <Btn onClick={submit}>로그인</Btn>
+      <Btn className="primary big" onClick={submit}>로그인</Btn>
       <ErrorBox>{err}</ErrorBox>
     </div>
   );
@@ -276,48 +290,66 @@ export default function App() {
     <AppCtx.Provider value={ctx}>
       <div className="app">
         {busy ? <div className="top-loading" /> : null}
-        <button className="sb-toggle" type="button" onClick={() => setSbOpen(true)} aria-label="사이드바 열기">
-          ☰
-        </button>
         <Sidebar open={sbOpen} onClose={() => setSbOpen(false)} />
         <main className="main">
-          <div className="stack">
-            <div className="app-title"> {APP_TITLE}</div>
-            {booting ? (
-              <Loading />
-            ) : (
-              <>
-                <Subheader>{user ? `🔐 로그인(${user.name})` : "🔐 로그인"}</Subheader>
-                {!user ? (
-                  <LoginForm onLogin={onLogin} />
-                ) : (
-                  <>
-                    <Btn onClick={logout}>로그아웃</Btn>
-                    {user.role === "student" ? <UserHeader /> : null}
-                    <div className="main-menu" role="radiogroup" aria-label="메인 메뉴">
-                      {tabs.keys.map((k) => (
-                        <div
-                          key={k}
-                          className={`mm ${k === active ? "on" : ""}`}
-                          onClick={() => {
-                            if (k !== active) setActive(k);
-                          }}
-                        >
-                          <span>{tabs.labels[k] || k}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <hr className="menu-hr" />
-                    {active ? (
-                      <div className="stack" key={active}>
-                        <TabContent tab={active} user={user} />
-                      </div>
-                    ) : null}
-                  </>
-                )}
-              </>
-            )}
-          </div>
+          <header className="topbar">
+            <button className="sb-toggle" type="button" onClick={() => setSbOpen(true)} aria-label="사이드바 열기">
+              ☰
+            </button>
+            <div className="brand">
+              <span className="brand-logo">🏫</span>
+              <div>
+                <div className="brand-title">학급 경제 시스템</div>
+                <div className="brand-sub">우리 반 경제 놀이터 🪙</div>
+              </div>
+            </div>
+            {user ? (
+              <div className="who">
+                <span className="who-chip">{user.role === "admin" ? "👑 관리자" : `🙂 ${user.name}`}</span>
+                <Btn full={false} className="ghost" onClick={logout}>
+                  로그아웃
+                </Btn>
+              </div>
+            ) : null}
+          </header>
+          {booting ? (
+            <Loading />
+          ) : !user ? (
+            <div className="login-card">
+              <div className="login-emoji">🐷🪙</div>
+              <div className="login-title">로그인</div>
+              <div className="login-sub">이름과 비밀번호를 입력해 주세요</div>
+              <LoginForm onLogin={onLogin} />
+            </div>
+          ) : (
+            <div className="stack">
+              {user.role === "student" ? <UserHeader /> : null}
+              <nav className="main-menu" role="radiogroup" aria-label="메인 메뉴">
+                {tabs.keys.map((k) => {
+                  const { icon, text, extra } = menuLabel(tabs.labels[k] || k);
+                  return (
+                    <button
+                      type="button"
+                      key={k}
+                      className={`mm ${k === active ? "on" : ""} ${extra ? "extra" : ""}`}
+                      onClick={() => {
+                        if (k !== active) setActive(k);
+                      }}
+                    >
+                      {icon ? <span className="mm-ic">{icon}</span> : null}
+                      <span>{text}</span>
+                      {extra ? <span className="mm-badge">관리</span> : null}
+                    </button>
+                  );
+                })}
+              </nav>
+              {active ? (
+                <section className="panel stack" key={active}>
+                  <TabContent tab={active} user={user} />
+                </section>
+              ) : null}
+            </div>
+          )}
         </main>
         <Toasts items={toasts} />
       </div>
