@@ -1,9 +1,7 @@
 // 🔎 개별조회
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
-import {
-  useApp, useLoad, Cols, H3, H4, Caption, Btn, Checkbox, TextInput, Info, Warning, ErrorBox, Expander, DataTable, Loading,
-} from "../components/ui.jsx";
+import { useApp, useLoad, Cols, H3, Caption, Btn, Checkbox, TextInput, Info, Warning, ErrorBox, Expander, DataTable, Loading, Popup } from "../components/ui.jsx";
 import { TX_COLUMNS, txRowsView } from "../components/trade.jsx";
 
 function oneLine(r) {
@@ -48,6 +46,7 @@ function StudentDetail({ sid, onChanged }) {
       setInfo(r.message || "");
       setFails(r.errors || []);
       setDelMode(false);
+      setPin("");
       setChecked({});
       txs.reload();
       onChanged && onChanged();
@@ -70,23 +69,28 @@ function StudentDetail({ sid, onChanged }) {
       {txs.data && !rows.length ? <Info>거래 내역이 없어요.</Info> : null}
       {rows.length ? (
         <>
-          <Btn onClick={() => setDelMode((v) => !v)}>🗑️ 통장내역 삭제</Btn>
-          {delMode ? (
-            <>
-              <H4>🗑️ 삭제할 내역 선택</H4>
-              <Caption>체크한 내역을 완전히 삭제합니다(목록/총액에서 즉시 제외). 적금·투자·되돌리기 관련 내역은 삭제할 수 없어요. 삭제하는 내역이 월급 입금이면 국고에 반영됐던 공제 세입도 함께 환급됩니다.</Caption>
-              <TextInput label="관리자 비밀번호(PIN)" type="password" value={pin} onChange={setPin} />
-              <Btn onClick={doDelete}>선택 항목 삭제</Btn>
-              <Checkbox
-                label="전체 선택"
-                checked={allOn}
-                disabled={!deletable.length}
-                onChange={(v) => {
-                  const next = { ...checked };
-                  deletable.forEach((id) => (next[id] = v));
-                  setChecked(next);
-                }}
-              />
+          <Btn onClick={() => setDelMode(true)}>🗑️ 통장내역 삭제</Btn>
+          <Popup
+            open={delMode}
+            title={`🗑️ 통장내역 삭제`}
+            onClose={() => {
+              setDelMode(false);
+              setWarn("");
+              setErr("");
+            }}
+          >
+            <Caption>체크한 내역을 완전히 삭제해요. 적금·투자·되돌리기 관련 내역은 삭제할 수 없고, 월급 입금을 지우면 국고에 반영됐던 공제 세입도 함께 환급돼요.</Caption>
+            <Checkbox
+              label="전체 선택"
+              checked={allOn}
+              disabled={!deletable.length}
+              onChange={(v) => {
+                const next = { ...checked };
+                deletable.forEach((id) => (next[id] = v));
+                setChecked(next);
+              }}
+            />
+            <div className="check-list">
               {rows.map((r) => (
                 <Checkbox
                   key={r.tx_id}
@@ -96,10 +100,14 @@ function StudentDetail({ sid, onChanged }) {
                   onChange={(v) => setChecked((c) => ({ ...c, [r.tx_id]: v }))}
                 />
               ))}
-              {warn ? <Warning>{warn}</Warning> : null}
-              <ErrorBox>{err}</ErrorBox>
-            </>
-          ) : null}
+            </div>
+            <Cols w={[2, 1]} va="bottom">
+              <TextInput label="관리자 비밀번호(PIN)" type="password" value={pin} onChange={setPin} onEnter={doDelete} />
+              <Btn onClick={doDelete}>🗑️ 선택 항목 삭제</Btn>
+            </Cols>
+            {warn ? <Warning>{warn}</Warning> : null}
+            <ErrorBox>{err}</ErrorBox>
+          </Popup>
           <DataTable rows={txRowsView(rows)} columns={TX_COLUMNS} csvName="통장내역" />
         </>
       ) : null}

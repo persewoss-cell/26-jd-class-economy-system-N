@@ -2,7 +2,7 @@
 import React, { useMemo, useState } from "react";
 import { api } from "../lib/api.js";
 import { readExcel, downloadExcel } from "../lib/excel.js";
-import { useApp, useLoad, Cols, H3, Subheader, Btn, TextInput, Select, NumberInput, Checkbox, Radio, SubTabs, ConfirmModal, Info, ErrorBox, Success, DataTable, SectionDivider, Loading, ExcelBar } from "../components/ui.jsx";
+import { useApp, useLoad, Cols, H3, Subheader, Btn, TextInput, Select, NumberInput, Checkbox, Radio, SubTabs, ConfirmModal, Info, ErrorBox, Success, DataTable, SectionDivider, Loading, ExcelBar, Popup } from "../components/ui.jsx";
 import { TradeForm, useTradeForm, splitAmount, templateDisplay, TX_COLUMNS, txRowsView } from "../components/trade.jsx";
 
 // ---------------- 되돌리기(관리자): 최근 입금/출금을 골라 기록째 지움 ----------------
@@ -23,23 +23,25 @@ function UndoPanel({ onClose }) {
       setPin("");
       setKey("");
       app.refresh();
+      onClose();
     } else setErr(r.error || "되돌리기 실패");
   };
   return (
-    <div className="undo-box">
-      <Subheader>↩️ 되돌리기(관리자)</Subheader>
+    <Popup open title="↩️ 되돌리기(관리자)" onClose={onClose}>
+      <div className="caption">고른 기록을 지우고 학생 잔액·국고를 원래대로 돌려요. (되돌린 기록은 남지 않아요)</div>
       {list.loading && !list.data ? <Loading /> : null}
       {list.data && !rows.length ? <Info>되돌릴 수 있는 최근 입금/출금이 없어요.</Info> : null}
       {rows.length ? (
-        <Cols w={[3.4, 1.4, 1.3, 0.8]} va="bottom">
+        <>
           <Select label="되돌릴 기록 (최근 순)" value={pick ? pick.key : ""} options={rows.map((r) => ({ value: r.key, label: r.label }))} onChange={setKey} />
-          <TextInput label="관리자 비밀번호" type="password" value={pin} onChange={setPin} onEnter={run} />
-          <Btn onClick={run}>↩️ 되돌리기</Btn>
-          <Btn onClick={onClose}>닫기</Btn>
-        </Cols>
+          <Cols w={[2, 1]} va="bottom">
+            <TextInput label="관리자 비밀번호" type="password" value={pin} onChange={setPin} onEnter={run} />
+            <Btn onClick={run}>↩️ 되돌리기</Btn>
+          </Cols>
+        </>
       ) : null}
       <ErrorBox>{err}</ErrorBox>
-    </div>
+    </Popup>
   );
 }
 

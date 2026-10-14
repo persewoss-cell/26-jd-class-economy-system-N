@@ -427,11 +427,8 @@ table.ledger { border-collapse: separate; border-spacing: 0; font-size: 0.92rem;
 .excel-bar .uploader .btn { min-height: 2.2rem; }
 .excel-bar .xb-row .check { flex: 1 1 auto; }
 
-.undo-box { flex: 1 1 100%; background: var(--out-l); border: 1px solid #ffd6da; border-radius: var(--radius); padding: 0.4rem 1rem 1rem; display: flex; flex-direction: column; gap: 0.6rem; }
 .cols .btn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cols .btn.full { padding-left: 0.6rem; padding-right: 0.6rem; }
-.undo-box .btn.tone-danger { background: var(--out); color: #fff; }
-.undo-box .btn.tone-danger:hover:not(:disabled) { background: #f0606c; }
 .cols .check { white-space: nowrap; }
 .uploader.over { border-color: var(--mint); background: var(--mint-l) !important; }
 .h-note { margin-left: auto; font-size: 0.85rem; font-weight: 700; color: var(--lav-d); background: var(--lav-l); padding: 0.2rem 0.7rem; border-radius: 999px; }

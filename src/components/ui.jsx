@@ -690,3 +690,19 @@ export function TplEditor({ items, itemLabel, blank, fromItem, fields, widths, o
     </>
   );
 }
+
+// 오른쪽 위 ✕ 로 닫는 넓은 팝업
+export function Popup({ open, title, onClose, children }) {
+  if (!open) return null;
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={title}>
+      <div className="modal wide">
+        <button type="button" className="modal-x" onClick={onClose} aria-label="닫기">
+          ✕
+        </button>
+        <div className="modal-head">{title}</div>
+        <div className="stack">{children}</div>
+      </div>
+    </div>
+  );
+}

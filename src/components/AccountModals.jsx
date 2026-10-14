@@ -1,22 +1,7 @@
 // 팝업: [학생] 비밀번호 변경 / [관리자] 계정생성·PIN변경·삭제 (예전 사이드바 내용)
 import React, { useState } from "react";
 import { api, setToken } from "../lib/api.js";
-import { useApp, TextInput, Btn, Cols, ErrorBox, ConfirmModal } from "./ui.jsx";
-
-function Popup({ open, title, onClose, children }) {
-  if (!open) return null;
-  return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="modal wide">
-        <button type="button" className="modal-x" onClick={onClose} aria-label="닫기">
-          ✕
-        </button>
-        <div className="modal-head">{title}</div>
-        <div className="stack">{children}</div>
-      </div>
-    </div>
-  );
-}
+import { useApp, TextInput, Btn, Cols, ErrorBox, ConfirmModal, Popup } from "./ui.jsx";
 
 // 학생: 로그인한 본인 비밀번호 변경 (바꾼 뒤에도 로그인 유지)
 export function StudentPinModal({ open, onClose }) {
