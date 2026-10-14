@@ -101,7 +101,18 @@ export default function Treasury() {
       {data.rows.length ? <DataTable rows={data.rows} columns={["내역", "세입", "세출", "총액", "날짜-시간", "기록자"]} csvName="국고내역" /> : <Info>국고 내역이 아직 없어요.</Info>}
 
       <H3>📝 세입/세출 내역 입력</H3>
-      <TreasuryForm form={form} setForm={setForm} templates={data.templates} onAction={save} />
+      <TreasuryForm
+        form={form}
+        setForm={setForm}
+        templates={data.templates}
+        onAction={save}
+        onReorder={async (ids) => {
+          const r = await api("tpl_reorder", { kind: "treasury", ids });
+          if (r.ok) await reload();
+          else setErr(r.error || "순서 변경 실패");
+          return r;
+        }}
+      />
       <ErrorBox>{err}</ErrorBox>
 
       <SectionDivider />

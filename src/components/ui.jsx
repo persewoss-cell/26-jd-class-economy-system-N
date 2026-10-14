@@ -254,6 +254,7 @@ export function NumberInput({ label, value, onChange, min = null, max = null, st
 
 // options: ["a","b"] 또는 [{value,label}]
 // onMove(index, -1|1)를 주면 목록 각 줄 오른쪽에 작은 ▲▼ (순서 바꾸기)가 생김
+// 옵션에 fixed: true 를 주면 그 줄(예: "(직접 입력)")은 움직이지 않고 다른 줄도 그 자리를 넘지 못함
 export function Select({ label, value, onChange, options, help, hideLabel, disabled, onMove }) {
   const opts = (options || []).map((o) => (typeof o === "object" ? o : { value: o, label: String(o) }));
   const idx = Math.max(0, opts.findIndex((o) => String(o.value) === String(value)));
@@ -323,14 +324,16 @@ function MoveSelect({ label, help, hideLabel, disabled, opts, idx, onChange, onM
                 >
                   {o.label}
                 </span>
-                <span className="msel-moves">
-                  <button type="button" title="위로" aria-label="위로" disabled={busy || i === 0} onClick={() => move(i, -1)}>
-                    ▲
-                  </button>
-                  <button type="button" title="아래로" aria-label="아래로" disabled={busy || i === opts.length - 1} onClick={() => move(i, 1)}>
-                    ▼
-                  </button>
-                </span>
+                {o.fixed ? null : (
+                  <span className="msel-moves">
+                    <button type="button" title="위로" aria-label="위로" disabled={busy || i === 0 || opts[i - 1].fixed} onClick={() => move(i, -1)}>
+                      ▲
+                    </button>
+                    <button type="button" title="아래로" aria-label="아래로" disabled={busy || i === opts.length - 1 || opts[i + 1].fixed} onClick={() => move(i, 1)}>
+                      ▼
+                    </button>
+                  </span>
+                )}
               </div>
             ))}
           </div>
@@ -802,7 +805,11 @@ export function ExcelBar({ downloads = [], file, onFile, overwrite, setOverwrite
 export function TplEditor({ items, itemLabel, blank, fromItem, fields, widths, onSave, onDelete, saveToast = "템플릿 저장 완료!", deleteToast = "삭제 완료!", reload, noun = "템플릿", idOf, onReorder }) {
   const app = useApp();
   const [mode, setMode] = useState("추가");
-  const [idx, setIdx] = useState(0);
+  // 고른 항목은 id로 기억 (다른 드롭다운에서 순서를 바꿔도 같은 항목 유지)
+  const keyOf = idOf || ((t) => String(t.template_id ?? t._id ?? ""));
+  const [selId, setSelId] = useState(null);
+  const idx = Math.max(0, items.findIndex((t) => keyOf(t) === selId));
+  const setIdx = (i) => setSelId(items[i] ? keyOf(items[i]) : null);
   const [f, setF] = useState(blank);
   const [err, setErr] = useState("");
   const [confirm, setConfirm] = useState(false);
@@ -827,17 +834,22 @@ export function TplEditor({ items, itemLabel, blank, fromItem, fields, widths, o
   // 순서 바꾸기: 고른 항목은 같이 따라가고, 수정 칸의 '순서' 숫자도 새 순서로
   const onMove = onReorder
     ? async (i, d) => {
-        const r = await onReorder(moveItem(items, i, d).map(idOf));
+        const ids = moveItem(items, i, d).map(keyOf);
+        const keep = cur ? keyOf(cur) : null;
+        const r = await onReorder(ids);
         if (!r.ok) return setErr(r.error || "순서 변경 실패");
         setErr("");
-        let ni = idx;
-        if (idx === i) ni = i + d;
-        else if (idx === i + d) ni = i;
         await reload();
-        setIdx(ni);
-        if (mode === "수정") setF((x) => ("order" in x ? { ...x, order: ni + 1 } : x));
+        setSelId(keep);
       }
     : undefined;
+  // 순서가 바뀌면(어느 드롭다운에서든) 수정 칸의 '순서' 숫자도 지금 순서로
+  const curKey = cur ? keyOf(cur) : "";
+  const curOrder = cur ? cur.order : null;
+  useEffect(() => {
+    if (mode === "수정" && curOrder) setF((x) => ("order" in x && x.order !== curOrder ? { ...x, order: curOrder } : x));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [curKey, curOrder]);
   const del = async () => {
     setConfirm(false);
     if (!cur) return;

@@ -1,6 +1,6 @@
 // 입금/출금 입력 폼(render_admin_trade_ui) + 국고 세입/세출 입력 폼(render_treasury_trade_ui)
 import React, { useState } from "react";
-import { Btn, TextInput, NumberInput, Select, Checkbox } from "./ui.jsx";
+import { Btn, TextInput, NumberInput, Select, Checkbox, moveItem } from "./ui.jsx";
 
 const QUICK = [10, 20, 50, 100, 200, 500, 1000];
 
@@ -37,11 +37,12 @@ function RoundButtons({ onPick }) {
 //   1줄: [내역 템플릿] [내역]          [국고 반영]
 //   2줄: [금액]       [+10 … 지우기] [입금] [출금] (+ 되돌리기 등 extra)
 // actions: [[방향("in"|"out"), 버튼 글자], [..]]  onAction(방향) 은 Promise 를 돌려주면 처리 중 버튼이 잠김
-function AmountForm({ form, setForm, tplLabel, tplOptions, onTpl, showTreasury, actions, onAction, extra }) {
+// onMove: 템플릿 드롭다운 각 줄의 ▲▼ (있을 때만)
+function AmountForm({ form, setForm, tplLabel, tplOptions, onTpl, onMove, showTreasury, actions, onAction, extra }) {
   const onPick = (amt) => setForm((f) => ({ ...f, amount: amt === 0 ? 0 : (f.amount || 0) + amt }));
   return (
     <div className="trade-grid">
-      <Select label={tplLabel} value={form.tpl} options={tplOptions} onChange={onTpl} />
+      <Select label={tplLabel} value={form.tpl} options={tplOptions} onChange={onTpl} onMove={onMove} />
       <TextInput label="내역" value={form.memo} onChange={(v) => setForm((f) => ({ ...f, memo: v }))} />
       <div className="tg-check">
         {showTreasury ? <Checkbox label="국고 반영" checked={form.treasury} onChange={(v) => setForm((f) => ({ ...f, treasury: v, treasuryTouched: true }))} /> : null}
@@ -60,11 +61,20 @@ function AmountForm({ form, setForm, tplLabel, tplOptions, onTpl, showTreasury, 
   );
 }
 
+// 템플릿 목록 → 드롭다운 옵션("(직접 입력)"은 맨 위 고정) + ▲▼ 순서 바꾸기
+// onReorder(ids): 바뀐 템플릿 id 순서를 저장 (권한이 있는 화면에서만 넘김)
+function tplChoices(templates, disp, onReorder) {
+  const list = templates || [];
+  const options = [{ value: "(직접 입력)", label: "(직접 입력)", fixed: true }, ...list.map((t) => ({ value: disp(t), label: disp(t) }))];
+  const onMove = onReorder ? (i, d) => onReorder(moveItem(list, i - 1, d).map((t) => t.template_id)) : undefined;
+  return { options, onMove };
+}
+
 // 통장 입금/출금 (관리자 개인·전체, 학생 통장)
-export function TradeForm({ form, setForm, templates, onAction, depositText = "💰 입금", extra }) {
+export function TradeForm({ form, setForm, templates, onAction, depositText = "💰 입금", extra, onReorder }) {
   const byDisp = {};
   (templates || []).forEach((t) => (byDisp[templateDisplay(t)] = t));
-  const labels = ["(직접 입력)", ...(templates || []).map(templateDisplay)];
+  const { options: labels, onMove } = tplChoices(templates, templateDisplay, onReorder);
   const onTpl = (sel) => {
     setForm((f) => {
       const t = sel === "(직접 입력)" ? null : byDisp[sel];
@@ -79,6 +89,7 @@ export function TradeForm({ form, setForm, templates, onAction, depositText = "�
       tplLabel="내역 템플릿"
       tplOptions={labels}
       onTpl={onTpl}
+      onMove={onMove}
       showTreasury
       actions={[["in", depositText], ["out", "💸 출금"]]}
       onAction={onAction}
@@ -88,10 +99,10 @@ export function TradeForm({ form, setForm, templates, onAction, depositText = "�
 }
 
 // 국고 세입/세출
-export function TreasuryForm({ form, setForm, templates, onAction }) {
+export function TreasuryForm({ form, setForm, templates, onAction, onReorder }) {
   const byDisp = {};
   (templates || []).forEach((t) => (byDisp[treasuryTemplateDisplay(t)] = t));
-  const labels = ["(직접 입력)", ...(templates || []).map(treasuryTemplateDisplay)];
+  const { options: labels, onMove } = tplChoices(templates, treasuryTemplateDisplay, onReorder);
   const onTpl = (sel) => {
     setForm((f) => {
       const t = sel === "(직접 입력)" ? null : byDisp[sel];
@@ -106,6 +117,7 @@ export function TreasuryForm({ form, setForm, templates, onAction }) {
       tplLabel="국고 템플릿"
       tplOptions={labels}
       onTpl={onTpl}
+      onMove={onMove}
       actions={[["in", "📥 세입"], ["out", "📤 세출"]]}
       onAction={onAction}
     />

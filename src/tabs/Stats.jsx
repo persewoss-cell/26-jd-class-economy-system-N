@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
 import { readExcel, downloadExcel } from "../lib/excel.js";
-import { useApp, useLoad, Cols, H3, Btn, TextInput, Select, NumberInput, Checkbox, Info, ErrorBox, SectionDivider, Loading, TplEditor, ConfirmModal, useSort, SortTh, ExcelBar, Warning, Success, DataTable } from "../components/ui.jsx";
+import { useApp, useLoad, Cols, H3, Btn, TextInput, Select, NumberInput, Checkbox, Info, ErrorBox, SectionDivider, Loading, TplEditor, ConfirmModal, useSort, SortTh, ExcelBar, Warning, Success, DataTable, moveItem } from "../components/ui.jsx";
 
 export function OX({ value, onPick, disabled }) {
   return (
@@ -66,7 +66,7 @@ export function LedgerGrid({ subs, rows, colWidth = "7.5rem" }) {
   );
 }
 
-function AddSubmission({ templates, onAdded }) {
+function AddSubmission({ templates, onAdded, reload }) {
   const app = useApp();
   const [tpl, setTpl] = useState("(직접 입력)");
   const [label, setLabel] = useState("");
@@ -85,11 +85,16 @@ function AddSubmission({ templates, onAdded }) {
   return (
     <>
       <H3>➕ 제출물 내역 추가</H3>
-      <Cols w={[1.6, 3, 0.9]} va="bottom">
+      <Cols w={[2.1, 2.6, 0.9]} va="bottom">
         <Select
           label="제출물 템플릿"
           value={tpl}
-          options={["(직접 입력)", ...templates.map((t) => t.label)]}
+          options={[{ value: "(직접 입력)", label: "(직접 입력)", fixed: true }, ...templates.map((t) => ({ value: t.label, label: t.label }))]}
+          onMove={async (i, d) => {
+            const r = await api("tpl_reorder", { kind: "stats", ids: moveItem(templates, i - 1, d).map((t) => t.template_id) });
+            if (r.ok) await reload();
+            else setErr(r.error || "순서 변경 실패");
+          }}
           onChange={(v) => {
             setTpl(v);
             if (v !== "(직접 입력)") setLabel(v);
@@ -255,7 +260,7 @@ export default function Stats() {
 
   return (
     <>
-      <AddSubmission templates={templates} onAdded={reload} />
+      <AddSubmission templates={templates} onAdded={reload} reload={reload} />
       <H3>📋 통계 관리 장부</H3>
       <Cols w={[4, 3]} gap="small" va="center">
         <div className="caption">{subs.length ? `제출물 ${subs.length}개 · 표를 옆으로 밀어서 지난 제출물을 볼 수 있어요` : ""}</div>

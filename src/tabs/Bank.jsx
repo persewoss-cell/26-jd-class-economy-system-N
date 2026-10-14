@@ -1,5 +1,5 @@
 // 🏦 내 통장 (관리자: 💰입금/출금 / 학생: 📝 통장/거래 / 권한학생: ⍟💰입금/출금(관리자))
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api.js";
 import { readExcel, downloadExcel } from "../lib/excel.js";
 import { useApp, useLoad, Cols, H3, Subheader, Btn, TextInput, Select, NumberInput, Checkbox, Radio, SubTabs, ConfirmModal, Info, ErrorBox, Success, DataTable, SectionDivider, Loading, ExcelBar, Popup, moveItem } from "../components/ui.jsx";
@@ -70,13 +70,19 @@ function catForExcel(t) {
   return CATS.includes(cat) ? cat : "없음";
 }
 
-function TemplateManager({ templates, reload }) {
+function TemplateManager({ templates, reload, reorder }) {
   const app = useApp();
   const [mode, setMode] = useState("추가");
-  const [pickIdx, setPickIdx] = useState(0);
+  // 고른 템플릿은 id로 기억 (입금/출금 칸 드롭다운에서 순서를 바꿔도 같은 템플릿 유지)
+  const [pickId, setPickId] = useState(null);
+  const [delId, setDelId] = useState(null);
+  const idxOf = (id) => Math.max(0, templates.findIndex((t) => t.template_id === id));
+  const pickIdx = idxOf(pickId);
+  const delIdx = idxOf(delId);
+  const setPickIdx = (i) => setPickId(templates[i] ? templates[i].template_id : null);
+  const setDelIdx = (i) => setDelId(templates[i] ? templates[i].template_id : null);
   const [form, setForm] = useState({ edit_id: "", base: "", cat: "없음", kind: "입금", amount: 10, order: 1 });
   const [err, setErr] = useState("");
-  const [delIdx, setDelIdx] = useState(0);
   const [delConfirm, setDelConfirm] = useState(false);
   const [file, setFile] = useState(null);
   const [bulk, setBulk] = useState(null);
@@ -195,16 +201,18 @@ function TemplateManager({ templates, reload }) {
   const opts = templates.map((t, i) => ({ value: i, label: templateDisplay(t) }));
   // 드롭다운 ▲▼: 순서를 바꿔 바로 저장, 고른 항목은 같이 따라감
   const onMove = async (i, d) => {
-    const r = await api("tpl_reorder", { kind: "bank", ids: moveItem(templates, i, d).map((t) => t.template_id) });
+    const ids = moveItem(templates, i, d).map((t) => t.template_id);
+    const r = await reorder(ids);
     if (!r.ok) return setErr(r.error || "순서 변경 실패");
     setErr("");
-    const follow = (cur) => (cur === i ? i + d : cur === i + d ? i : cur);
-    await reload();
-    const np = follow(pickIdx);
-    setPickIdx(np);
-    setDelIdx(follow(delIdx));
-    if (mode === "수정") setForm((f) => ({ ...f, order: np + 1 }));
   };
+  // 어느 드롭다운에서 순서를 바꿨든 수정 칸의 '순서' 숫자는 지금 순서로
+  const pickedId = templates[pickIdx] ? templates[pickIdx].template_id : null;
+  const pickedOrder = templates[pickIdx] ? templates[pickIdx].order : null;
+  useEffect(() => {
+    if (mode === "수정" && pickedId && form.edit_id === pickedId && pickedOrder) setForm((f) => (f.order === pickedOrder ? f : { ...f, order: pickedOrder }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickedId, pickedOrder]);
   return (
     <>
       <SectionDivider />
@@ -281,6 +289,13 @@ export function BankAdmin() {
   const tpls = useLoad("templates_list", {}, []);
   const templates = (tpls.data && tpls.data.templates) || [];
   const accounts = useLoad("accounts_list", {}, [app.ver]);
+  // 템플릿 드롭다운 ▲▼ → 순서 저장 후 바로 다시 불러옴 (입금/출금 칸·템플릿 관리 모두 같은 목록)
+  const reorderTpl = async (ids) => {
+    const r = await api("tpl_reorder", { kind: "bank", ids });
+    if (r.ok) await tpls.reload();
+    else app.toast(r.error || "순서 변경 실패", "⚠️");
+    return r;
+  };
 
   // 국고 반영: 체크칸을 직접 누르지 않았으면 입금/출금을 누를 때 "국고에 반영할까요?" 팝업
   const [askTreasury, setAskTreasury] = useState(null); // { run: (treasury) => Promise }
@@ -371,7 +386,7 @@ export function BankAdmin() {
       {sub === "전체" ? (
         <>
           <H3>🎁 전체 일괄 입금/출금</H3>
-          <TradeForm form={bForm} setForm={setBForm} templates={templates} onAction={(dir) => saveBulk(dir)} extra={undoBtn} />
+          <TradeForm form={bForm} setForm={setBForm} templates={templates} onAction={(dir) => saveBulk(dir)} extra={undoBtn} onReorder={reorderTpl} />
           <ErrorBox>{bErr}</ErrorBox>
           {undo ? <UndoPanel onClose={() => setUndo(false)} /> : null}
         </>
@@ -399,12 +414,12 @@ export function BankAdmin() {
                 </Cols>
               ))}
               <H3>🎁 개인 입금/출금</H3>
-              <TradeForm form={pForm} setForm={setPForm} templates={templates} onAction={(dir) => savePersonal(dir)} extra={undoBtn} />
+              <TradeForm form={pForm} setForm={setPForm} templates={templates} onAction={(dir) => savePersonal(dir)} extra={undoBtn} onReorder={reorderTpl} />
               <ErrorBox>{pErr}</ErrorBox>
               {undo ? <UndoPanel onClose={() => setUndo(false)} /> : null}
             </>
           ) : null}
-          <TemplateManager templates={templates} reload={tpls.reload} />
+          <TemplateManager templates={templates} reload={tpls.reload} reorder={reorderTpl} />
         </>
       )}
     </>

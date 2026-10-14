@@ -339,7 +339,7 @@ table.inv_hist_table th { font-weight: 700; background: #f7f9fc; text-align: cen
 .credit-ledger-score { font-weight: 800; }
 
 /* 통계·신용 장부: 번호·이름 고정 + 옆으로 밀기 */
-.ledger-wrap { overflow: auto; max-height: 72vh; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; -webkit-overflow-scrolling: touch; }
+.ledger-wrap { overflow-x: auto; overflow-y: hidden; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; -webkit-overflow-scrolling: touch; }
 table.ledger { border-collapse: separate; border-spacing: 0; font-size: 0.92rem; }
 .ledger th, .ledger td { padding: 0.45rem 0.6rem; border-bottom: 1px solid #f0f3f7; text-align: center; white-space: nowrap; background: #fff; }
 .ledger thead th { position: sticky; top: 0; z-index: 2; background: #f7f9fc; color: #5a6578; white-space: normal; vertical-align: bottom; }
@@ -404,7 +404,7 @@ table.ledger { border-collapse: separate; border-spacing: 0; font-size: 0.92rem;
 @keyframes mpop { from { transform: scale(0.94); opacity: 0; } to { transform: none; opacity: 1; } }
 
 /* ---------- 입금/출금 폼: 2줄 3칸 (위아래 칸 폭이 맞음) ---------- */
-.trade-grid { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(0, 2.3fr) auto; gap: 0.75rem 0.8rem; align-items: end; flex: 1 1 100%; }
+.trade-grid { display: grid; grid-template-columns: minmax(190px, 1.35fr) minmax(0, 2.1fr) auto; gap: 0.75rem 0.8rem; align-items: end; flex: 1 1 100%; }
 .trade-grid .tg-check { display: flex; align-items: center; min-height: 2.7rem; }
 .trade-grid .tg-actions { display: flex; gap: 0.5rem; }
 .trade-grid .round-btns { flex-wrap: nowrap; gap: 0.35rem; }
@@ -484,7 +484,7 @@ table.ledger { border-collapse: separate; border-spacing: 0; font-size: 0.92rem;
 /* 순서 바꾸기 드롭다운: 각 줄 오른쪽 작은 ▲▼ */
 .msel { position: relative; }
 .msel-btn { width: 100%; text-align: left; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.msel-list { position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 6px); background: #fff; border: 1px solid var(--line); border-radius: var(--radius); max-height: 320px; overflow: auto; box-shadow: var(--shadow-lg); padding: 4px; }
+.msel-list { position: absolute; z-index: 30; left: 0; min-width: max(100%, 20rem); max-width: 90vw; top: calc(100% + 6px); background: #fff; border: 1px solid var(--line); border-radius: var(--radius); max-height: 320px; overflow: auto; box-shadow: var(--shadow-lg); padding: 4px; }
 .msel-list.busy { opacity: 0.7; }
 .msel-item { display: flex; align-items: center; gap: 0.4rem; border-radius: 8px; }
 .msel-item:hover { background: var(--mint-l); }
