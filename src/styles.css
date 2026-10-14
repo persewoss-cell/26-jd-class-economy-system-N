@@ -450,3 +450,4 @@ table.ledger { border-collapse: separate; border-spacing: 0; font-size: 0.92rem;
 .cols .btn.full { padding-left: 0.6rem; padding-right: 0.6rem; }
 .undo-box .btn.tone-danger { background: var(--out); color: #fff; }
 .undo-box .btn.tone-danger:hover:not(:disabled) { background: #f0606c; }
+.cols .check { white-space: nowrap; }

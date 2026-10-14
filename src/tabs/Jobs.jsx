@@ -110,7 +110,7 @@ function PayrollBox({ data, reload }) {
 
   return (
     <Expander title="💸 월급 지급 설정">
-      <Cols w={[1, 0.7, 1, 2.5]} va="bottom">
+      <Cols w={[1, 0.9, 1, 2.4]} va="bottom">
         <NumberInput label="월급 지급 날짜: 매월 (일)" min={1} max={31} value={day} onChange={setDay} />
         <Checkbox
           label="자동지급"
