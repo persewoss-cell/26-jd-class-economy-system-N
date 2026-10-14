@@ -50,22 +50,16 @@ function LotteryAdmin() {
   return (
     <>
       <H3>🛠️ 복권 설정 및 개시</H3>
-      <Cols w={3}>
-        <>
-          <NumberInput label="복권 가격 설정" min={2} value={cfg.price} onChange={(v) => setCfg((c) => ({ ...c, price: v }))} />
-          <NumberInput label="1등 당첨 백분율(%)" min={0} max={100} value={cfg.first} onChange={(v) => setCfg((c) => ({ ...c, first: v }))} />
-        </>
-        <>
-          <NumberInput label="세금(%)" min={1} max={100} value={cfg.tax} onChange={(v) => setCfg((c) => ({ ...c, tax: v }))} />
-          <NumberInput label="2등 당첨 백분율(%)" min={0} max={100} value={cfg.second} onChange={(v) => setCfg((c) => ({ ...c, second: v }))} />
-        </>
-        <NumberInput label="3등 당첨금" min={0} value={cfg.third} onChange={(v) => setCfg((c) => ({ ...c, third: v }))} />
-      </Cols>
-      {cfg.first + cfg.second !== 100 ? <Warning>1등 + 2등 당첨 백분율의 합은 반드시 100이어야 합니다.</Warning> : null}
-      <Cols w={2}>
+      <Cols w={[1, 1, 1, 1.1, 1.1, 0.8, 0.8]} va="bottom">
+        <NumberInput label="복권 가격" stepper={false} min={2} value={cfg.price} onChange={(v) => setCfg((c) => ({ ...c, price: v }))} />
+        <NumberInput label="세금(%)" stepper={false} min={1} max={100} value={cfg.tax} onChange={(v) => setCfg((c) => ({ ...c, tax: v }))} />
+        <NumberInput label="3등 당첨금" stepper={false} min={0} value={cfg.third} onChange={(v) => setCfg((c) => ({ ...c, third: v }))} />
+        <NumberInput label="1등 백분율(%)" stepper={false} min={0} max={100} value={cfg.first} onChange={(v) => setCfg((c) => ({ ...c, first: v }))} />
+        <NumberInput label="2등 백분율(%)" stepper={false} min={0} max={100} value={cfg.second} onChange={(v) => setCfg((c) => ({ ...c, second: v }))} />
         <Btn onClick={() => run("lottery_open", { ticket_price: cfg.price, tax_rate: cfg.tax, first_pct: cfg.first, second_pct: cfg.second, third_prize: cfg.third }, (r) => `복권 ${r.round_no}회 개시`, "복권 개시 실패")}>개시</Btn>
         <Btn onClick={() => run("lottery_close", {}, "복권 마감 완료", "복권 마감 실패")}>마감</Btn>
       </Cols>
+      {cfg.first + cfg.second !== 100 ? <Warning>1등 + 2등 당첨 백분율의 합은 반드시 100이어야 합니다.</Warning> : null}
       <ErrorBox>{err}</ErrorBox>
       {data.open ? <Success>{`진행 중 복권: ${data.open.round_no}회 | 가격 ${data.open.ticket_price}`}</Success> : <Info>개시된 복권이 없습니다.</Info>}
 
@@ -134,27 +128,27 @@ function LotteryAdmin() {
       )}
 
       <H3>🎰 복권 추첨하기</H3>
-      <Cols w={4}>
-        {["첫 번째 당첨번호", "두 번째 당첨번호", "세 번째 당첨번호", "네 번째 당첨번호"].map((l, i) => (
-          <NumberInput key={l} label={l} min={1} max={20} value={wn[i]} onChange={(v) => setWn((a) => a.map((x, j) => (j === i ? v : x)))} />
+      <Cols w={[1, 1, 1, 1, 1.4]} va="bottom">
+        {["첫 번째", "두 번째", "세 번째", "네 번째"].map((l, i) => (
+          <NumberInput key={l} label={`${l} 당첨번호`} min={1} max={20} value={wn[i]} onChange={(v) => setWn((a) => a.map((x, j) => (j === i ? v : x)))} />
         ))}
+        <Btn
+          onClick={async () => {
+            setDrawErr("");
+            if (!cur) return setDrawErr("대상 복권 회차가 없습니다.");
+            if (dup) return setDrawErr("당첨번호 4개는 중복 없이 입력해 주세요.");
+            const r = await api("lottery_draw", { round_id: cur.round_id, numbers: wn });
+            if (r.ok) {
+              setVisibleId(cur.round_id);
+              app.toast("복권 추첨 완료", "✅");
+              app.refresh();
+            } else setDrawErr(r.error || "복권 추첨 실패");
+          }}
+        >
+          당첨번호 제출
+        </Btn>
       </Cols>
       {dup ? <Warning>당첨번호 4개는 서로 중복될 수 없습니다.</Warning> : null}
-      <Btn
-        onClick={async () => {
-          setDrawErr("");
-          if (!cur) return setDrawErr("대상 복권 회차가 없습니다.");
-          if (dup) return setDrawErr("당첨번호 4개는 중복 없이 입력해 주세요.");
-          const r = await api("lottery_draw", { round_id: cur.round_id, numbers: wn });
-          if (r.ok) {
-            setVisibleId(cur.round_id);
-            app.toast("복권 추첨 완료", "✅");
-            app.refresh();
-          } else setDrawErr(r.error || "복권 추첨 실패");
-        }}
-      >
-        당첨번호 제출
-      </Btn>
       <ErrorBox>{drawErr}</ErrorBox>
 
       <H3>🎉 당첨자 확인</H3>

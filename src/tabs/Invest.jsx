@@ -1,9 +1,7 @@
 // 📈 투자 (관리자 / 학생 / 권한학생 ⍟📈 투자(관리자))
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
-import {
-  useApp, useLoad, Cols, H3, H4, Caption, Btn, TextInput, Select, NumberInput, Info, Warning, ErrorBox, Expander, DataTable, Loading,
-} from "../components/ui.jsx";
+import { useApp, useLoad, Cols, H3, H4, Caption, Btn, TextInput, Select, NumberInput, Info, Warning, ErrorBox, Expander, DataTable, Loading, ConfirmModal } from "../components/ui.jsx";
 
 const f2 = (v) => (Number(v) || 0).toFixed(2);
 
@@ -49,45 +47,79 @@ function niceAxis(values, target = 6) {
   return [lo, hi, Array.from({ length: cnt }, (_, i) => +(lo + st * i).toFixed(10))];
 }
 
-// 꺾은선 그래프: 상승 빨강 / 하락 파랑 / 보합 검정, 점은 회색
+// 긴 글자를 칸 폭에 맞춰 여러 줄로 (잘리지 않게)
+function wrapLabel(text, perLine) {
+  const out = [];
+  for (const word of String(text || "-").split(/\s+/)) {
+    let w = word;
+    while (w.length > perLine) {
+      out.push(w.slice(0, perLine));
+      w = w.slice(perLine);
+    }
+    if (out.length && (out[out.length - 1] + " " + w).length <= perLine) out[out.length - 1] += " " + w;
+    else if (w) out.push(w);
+  }
+  return out.length ? out : ["-"];
+}
+
+// 꺾은선 그래프: 굵고 부드러운 선 + 점마다 값 표시. 상승 빨강 / 하락 파랑 / 보합 검정
 function PriceChart({ points }) {
-  const W = 600;
-  const H = 260;
-  const padL = 46;
-  const padR = 12;
-  const padT = 12;
-  const padB = 46;
-  const [lo, hi, ticks] = niceAxis(points.map((p) => p.y));
+  const W = 1000;
+  const padX = 30;
+  const padT = 34;
+  const plotH = 250;
   const n = points.length;
-  const band = (W - padL - padR) / Math.max(n, 1);
-  const x = (i) => padL + band * (i + 0.5);
-  const y = (v) => padT + (H - padT - padB) * (1 - (v - lo) / (hi - lo || 1));
+  const band = (W - padX * 2) / Math.max(n, 1);
+  const perLine = Math.max(3, Math.floor(band / 15));
+  const labels = points.map((p) => wrapLabel(p.label, perLine));
+  const maxLines = Math.max(1, ...labels.map((l) => l.length));
+  const H = padT + plotH + 16 + maxLines * 16;
+  const [lo, hi, ticks] = niceAxis(points.map((p) => p.y));
+  const x = (i) => padX + band * (i + 0.5);
+  // 가장 높은/낮은 점이 테두리에 붙지 않게 위아래 여유
+  const vmin = Math.min(...points.map((p) => p.y));
+  const vmax = Math.max(...points.map((p) => p.y));
+  const span = vmax - vmin || Math.abs(vmax) || 1;
+  const ylo = vmin - span * 0.18;
+  const yhi = vmax + span * 0.18;
+  const y = (v) => padT + plotH * (1 - (v - ylo) / (yhi - ylo || 1));
+  const minor = [];
+  for (let k = 0; k < ticks.length - 1; k++) for (let m = 1; m < 4; m++) minor.push(ticks[k] + ((ticks[k + 1] - ticks[k]) * m) / 4);
+  const inPlot = (t) => y(t) >= padT - 6 && y(t) <= padT + plotH + 6;
+  const colorOf = (a, b) => (b > a ? "#ef4444" : b < a ? "#3b82f6" : "#111827");
   return (
     <div className="chart">
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
-        {ticks.map((t) => (
-          <g key={t}>
-            <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} stroke="#e5e7eb" strokeWidth="1" />
-            <text x={padL - 6} y={y(t) + 4} fontSize="11" textAnchor="end" fill="#555">
-              {t}
-            </text>
-          </g>
+      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label="주가 변동 그래프">
+        {minor.filter(inPlot).map((t, k) => (
+          <line key={`m${k}`} x1={padX / 2} x2={W - padX / 2} y1={y(t)} y2={y(t)} stroke="#f1f3f6" strokeWidth="1" />
+        ))}
+        {ticks.filter(inPlot).map((t) => (
+          <line key={t} x1={padX / 2} x2={W - padX / 2} y1={y(t)} y2={y(t)} stroke="#e3e7ee" strokeWidth="1" />
         ))}
         {points.slice(0, -1).map((p, i) => {
           const q = points[i + 1];
-          const color = q.y > p.y ? "red" : q.y < p.y ? "blue" : "black";
-          return <line key={i} x1={x(i)} y1={y(p.y)} x2={x(i + 1)} y2={y(q.y)} stroke={color} strokeWidth="3" />;
+          return <line key={i} x1={x(i)} y1={y(p.y)} x2={x(i + 1)} y2={y(q.y)} stroke={colorOf(p.y, q.y)} strokeOpacity="0.35" strokeWidth="9" strokeLinecap="round" />;
         })}
-        {points.map((p, i) => (
-          <g key={i}>
-            <circle cx={x(i)} cy={y(p.y)} r="4" fill="none" stroke="gray" strokeWidth="1.5">
-              <title>{`${p.label}: ${p.y}`}</title>
-            </circle>
-            <text x={x(i)} y={H - padB + 16} fontSize="11" textAnchor="middle" fill="#444">
-              {p.label.length > 8 ? p.label.slice(0, 8) + "…" : p.label}
-            </text>
-          </g>
-        ))}
+        {points.map((p, i) => {
+          const prev = i > 0 ? points[i - 1].y : p.y;
+          const next = i < n - 1 ? points[i + 1].y : p.y;
+          const below = p.y < prev && p.y <= next && i > 0; // 골짜기 점은 값 글자를 아래에
+          return (
+            <g key={i}>
+              <circle cx={x(i)} cy={y(p.y)} r="4.5" fill="#fff" stroke={i > 0 ? colorOf(prev, p.y) : "#9ca3af"} strokeWidth="2">
+                <title>{`${p.label}: ${p.y}`}</title>
+              </circle>
+              <text x={x(i)} y={below ? y(p.y) + 22 : y(p.y) - 12} fontSize="15" fontWeight="800" textAnchor="middle" fill="#374151">
+                {p.y}
+              </text>
+              {labels[i].map((line, k) => (
+                <text key={k} x={x(i)} y={padT + plotH + 22 + k * 16} fontSize="13" textAnchor="middle" fill="#4b5563">
+                  {line}
+                </text>
+              ))}
+            </g>
+          );
+        })}
       </svg>
     </div>
   );
@@ -98,7 +130,8 @@ function HistoryBlock({ hist, product }) {
   const init = hist.length ? hist[hist.length - 1].price_before : product.current_price;
   const points = [{ label: "시작환산주가", y: +Number(init).toFixed(2) }, ...[...hist].reverse().map((h) => ({ label: h.reason || "-", y: +Number(h.price_after).toFixed(2) }))];
   return (
-    <Cols w={[1.7, 2.2]} gap="large">
+    <>
+      <PriceChart points={points} />
       <div className="inv_hist_table_wrap">
         <table className="inv_hist_table">
           <thead>
@@ -126,8 +159,7 @@ function HistoryBlock({ hist, product }) {
           </tbody>
         </table>
       </div>
-      <PriceChart points={points} />
-    </Cols>
+    </>
   );
 }
 
@@ -165,6 +197,7 @@ function ProductAdmin({ all, reload }) {
   const app = useApp();
   const active = all.filter((p) => p.is_active);
   const [sel, setSel] = useState("(신규 추가)");
+  const [delAsk, setDelAsk] = useState(false);
   const blank = { name: "", min: 0, max: 100, real: 0, pct: 10 };
   const [f, setF] = useState(blank);
   const [warn, setWarn] = useState("");
@@ -205,22 +238,24 @@ function ProductAdmin({ all, reload }) {
   };
   return (
     <>
-      <H3>🧰 투자 종목 추가/수정/삭제</H3>
-      <Select label="편집 대상" value={sel} options={["(신규 추가)", ...active.map((p) => p.name)]} onChange={onSel} />
-      <Cols w={[1.8, 1.0, 1.0, 1.2, 1.2]}>
+      <H3>
+        🧰 투자 종목 추가/수정/삭제 <span className="h-note">환산주가(자동): {f2(norm)} / 100</span>
+      </H3>
+      <Cols w={[1.5, 1.7, 0.9, 0.9, 1.1, 1]} va="bottom">
+        <Select label="편집 대상" value={sel} options={["(신규 추가)", ...active.map((p) => p.name)]} onChange={onSel} />
         <TextInput label="투자 종목명" value={f.name} onChange={(v) => setF((x) => ({ ...x, name: v }))} />
-        <NumberInput label="최하값" value={f.min} onChange={(v) => setF((x) => ({ ...x, min: v }))} min={-9999999.99} max={9999999.99} step={0.01} decimals={2} />
-        <NumberInput label="최대값" value={f.max} onChange={(v) => setF((x) => ({ ...x, max: v }))} min={-9999999.99} max={9999999.99} step={0.01} decimals={2} />
-        <NumberInput label="초기/현재 실제주가" value={f.real} onChange={(v) => setF((x) => ({ ...x, real: v }))} min={-9999999.99} max={9999999.99} step={0.01} decimals={2} />
-        <NumberInput label="주가 1당 손익 %" value={f.pct} onChange={(v) => setF((x) => ({ ...x, pct: v }))} min={0} max={1000} step={0.01} decimals={2} />
+        <NumberInput label="최하값" stepper={false} value={f.min} onChange={(v) => setF((x) => ({ ...x, min: v }))} min={-9999999.99} max={9999999.99} step={0.01} decimals={2} />
+        <NumberInput label="최대값" stepper={false} value={f.max} onChange={(v) => setF((x) => ({ ...x, max: v }))} min={-9999999.99} max={9999999.99} step={0.01} decimals={2} />
+        <NumberInput label="초기/현재 실제주가" stepper={false} value={f.real} onChange={(v) => setF((x) => ({ ...x, real: v }))} min={-9999999.99} max={9999999.99} step={0.01} decimals={2} />
+        <NumberInput label="주가 1당 손익 %" stepper={false} value={f.pct} onChange={(v) => setF((x) => ({ ...x, pct: v }))} min={0} max={1000} step={0.01} decimals={2} />
       </Cols>
-      <Caption>환산주가(자동): {f2(norm)} / 100</Caption>
       <Cols w={2}>
-        <Btn onClick={save}>저장</Btn>
-        <Btn onClick={del} disabled={!cur}>
-          삭제
+        <Btn onClick={save}>✅ 저장</Btn>
+        <Btn onClick={() => cur && setDelAsk(true)} disabled={!cur}>
+          🗑️ 삭제
         </Btn>
       </Cols>
+      <ConfirmModal open={delAsk} title="🗑️ 종목 삭제" message={`'${cur ? cur.name : ""}' 종목을 삭제할까요?`} onYes={() => { setDelAsk(false); del(); }} onNo={() => setDelAsk(false)} />
       {warn ? <Warning>{warn}</Warning> : null}
       <ErrorBox>{err}</ErrorBox>
     </>

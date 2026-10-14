@@ -69,16 +69,16 @@ function AddSubmission({ templates, onAdded }) {
   return (
     <>
       <H3>➕ 제출물 내역 추가</H3>
-      <Select
-        label="제출물 템플릿"
-        value={tpl}
-        options={["(직접 입력)", ...templates.map((t) => t.label)]}
-        onChange={(v) => {
-          setTpl(v);
-          if (v !== "(직접 입력)") setLabel(v);
-        }}
-      />
-      <Cols w={[3.0, 1.0]} va="bottom">
+      <Cols w={[1.6, 3, 0.9]} va="bottom">
+        <Select
+          label="제출물 템플릿"
+          value={tpl}
+          options={["(직접 입력)", ...templates.map((t) => t.label)]}
+          onChange={(v) => {
+            setTpl(v);
+            if (v !== "(직접 입력)") setLabel(v);
+          }}
+        />
         <TextInput label="내역" value={label} onChange={setLabel} />
         <Btn onClick={save}>저장</Btn>
       </Cols>

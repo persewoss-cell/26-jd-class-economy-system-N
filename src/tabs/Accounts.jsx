@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
 import { readExcel, downloadExcel } from "../lib/excel.js";
-import { useApp, useLoad, Cols, H3, H4, Btn, Warning, ErrorBox, Loading, ExcelBar } from "../components/ui.jsx";
+import { useApp, useLoad, Cols, H3, H4, Btn, Warning, ErrorBox, Loading, ExcelBar, ConfirmModal } from "../components/ui.jsx";
 
 export default function Accounts() {
   const app = useApp();
@@ -80,7 +80,7 @@ export default function Accounts() {
       </ExcelBar>
 
       <H4>👥 계정/비번 관리</H4>
-      <Cols w={3}>
+      <Cols w={4}>
         <Btn onClick={() => setRows((rs) => rs.map((r) => ({ ...r, sel: true })))}>✅ 전체 선택</Btn>
         <Btn onClick={() => setRows((rs) => rs.map((r) => ({ ...r, sel: false })))}>⬜ 전체 해제</Btn>
         <Btn
@@ -93,20 +93,12 @@ export default function Accounts() {
         >
           🗑️ 계정 삭제(선택)
         </Btn>
+        <Btn onClick={saveEdits} disabled={!changed.length}>
+          💾 변경 저장{changed.length ? ` (${changed.length}명)` : ""}
+        </Btn>
       </Cols>
       {warn ? <Warning>{warn}</Warning> : null}
-      {delTargets ? (
-        <>
-          <Warning>정말 삭제하시겠습니까?</Warning>
-          <Cols w={2}>
-            <Btn onClick={doDelete}>예</Btn>
-            <Btn onClick={() => setDelTargets(null)}>아니오</Btn>
-          </Cols>
-        </>
-      ) : null}
-      <Btn onClick={saveEdits} disabled={!changed.length}>
-        💾 변경 저장{changed.length ? ` (${changed.length}명)` : ""}
-      </Btn>
+      <ConfirmModal open={!!delTargets} title="🗑️ 계정 삭제" message={`선택한 ${delTargets ? delTargets.length : 0}명의 계정을 삭제할까요?`} onYes={doDelete} onNo={() => setDelTargets(null)} />
       {saveMsg ? saveMsg[0] === "warning" ? <Warning>{saveMsg[1]}</Warning> : <ErrorBox>{saveMsg[1]}</ErrorBox> : null}
       <div className="tbl-wrap">
         <div className="tbl-scroll" style={{ maxHeight: tableH }}>

@@ -116,6 +116,7 @@ export const Loading = ({ text = "불러오는 중..." }) => (
 const textOf = (c) => (typeof c === "string" || typeof c === "number" ? String(c) : Array.isArray(c) ? c.map(textOf).join("") : c && c.props ? textOf(c.props.children) : "");
 function toneOf(children) {
   const t = textOf(children);
+  if (/전체 해제|선택 해제|닫기|다시 검사/.test(t)) return "";
   if (/삭제|회수|거절|초기화|해제|마감|중도해지|중도 해지|되돌리기|아니오/.test(t)) return "tone-danger";
   if (/저장|추가|승인|지급|개시|구입|제출|고용|부여|조회|반영|참여|추첨|생성|변경|로그인|예$|^예|투자하기|가입|적용|실행|등록/.test(t)) return "tone-main";
   return "";
@@ -519,14 +520,30 @@ export function DataTable({ rows, columns, small, tall, height, emptyText = null
 // ---------------- 파일 업로드 / 다운로드 ----------------
 export function FileUpload({ label, file, onFile, help, accept = ".xlsx", hideLabel }) {
   const ref = useRef(null);
+  const [over, setOver] = useState(false);
+  // 파일을 끌어다 놓아도 올라감 (드래그 앤 드롭)
+  const onDrop = (e) => {
+    e.preventDefault();
+    setOver(false);
+    const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) onFile(f);
+  };
   return (
     <div className="field">
       <Label label={label} help={help} hidden={hideLabel} />
-      <div className="uploader">
+      <div
+        className={`uploader ${over ? "over" : ""}`}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setOver(true);
+        }}
+        onDragLeave={() => setOver(false)}
+        onDrop={onDrop}
+      >
         <button type="button" className="btn" onClick={() => ref.current && ref.current.click()}>
           파일 선택
         </button>
-        <span className="fname">{file ? `${file.name} (${Math.round(file.size / 1024)}KB)` : "선택된 파일 없음 · xlsx"}</span>
+        <span className="fname">{file ? `${file.name} (${Math.round(file.size / 1024)}KB)` : over ? "여기에 놓으세요 📥" : "파일을 끌어다 놓거나 선택하세요 · xlsx"}</span>
         {file ? (
           <button
             type="button"
@@ -581,14 +598,21 @@ export function ExcelBar({ downloads = [], file, onFile, overwrite, setOverwrite
             {text}
           </Btn>
         ))}
+        {!setOverwrite ? (
+          <Btn full={false} onClick={onSave}>
+            {saveText}
+          </Btn>
+        ) : null}
       </div>
       {children}
-      <div className="xb-row">
-        {setOverwrite ? <Checkbox label={overwriteLabel} checked={overwrite} onChange={setOverwrite} /> : null}
-        <Btn full={false} onClick={onSave}>
-          {saveText}
-        </Btn>
-      </div>
+      {setOverwrite ? (
+        <div className="xb-row">
+          <Checkbox label={overwriteLabel} checked={overwrite} onChange={setOverwrite} />
+          <Btn full={false} onClick={onSave}>
+            {saveText}
+          </Btn>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -411,7 +411,8 @@ table.ledger { border-collapse: separate; border-spacing: 0; font-size: 0.92rem;
 @keyframes tl { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
 
 /* 차트 */
-.chart svg { width: 100%; height: 260px; display: block; }
+.chart { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 0.4rem 0.6rem; }
+.chart svg { width: 100%; height: auto; display: block; }
 
 /* ---------- 확인 팝업 ---------- */
 .modal-backdrop { position: fixed; inset: 0; z-index: 250; background: rgba(45, 55, 72, 0.35); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; padding: 16px; animation: mfade 0.12s ease-out; }
@@ -451,3 +452,6 @@ table.ledger { border-collapse: separate; border-spacing: 0; font-size: 0.92rem;
 .undo-box .btn.tone-danger { background: var(--out); color: #fff; }
 .undo-box .btn.tone-danger:hover:not(:disabled) { background: #f0606c; }
 .cols .check { white-space: nowrap; }
+.uploader.over { border-color: var(--mint); background: var(--mint-l) !important; }
+.h-note { margin-left: auto; font-size: 0.85rem; font-weight: 700; color: var(--lav-d); background: var(--lav-l); padding: 0.2rem 0.7rem; border-radius: 999px; }
+.h3 .h-note { margin-left: 0.6rem; }

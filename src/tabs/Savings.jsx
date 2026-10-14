@@ -129,15 +129,16 @@ function AdminPart({ data }) {
       ) : (
         <>
           <DataTable rows={rows} columns={LEDGER_COLS} small csvName="적금관리장부" />
-          <H4>🛠️ 중도해지 처리(관리자)</H4>
-          <Caption>• 진행중인 적금만 중도해지 가능(원금만 지급)</Caption>
+          <H4>🛠️ 관리자 강제 중도해지 처리</H4>
           {!running.length ? (
             <Info>진행중인 적금이 없습니다.</Info>
           ) : (
-            <>
-              <Select label="중도해지할 적금 선택" value={pick} options={opts} onChange={setPick} />
-              {pick !== "(선택 없음)" ? <Btn onClick={cancel}>중도해지 처리(원금 지급)</Btn> : null}
-            </>
+            <Cols w={[3, 1.2]} va="bottom">
+              <Select label="중도해지할 적금" hideLabel value={pick} options={opts} onChange={setPick} />
+              <Btn onClick={cancel} disabled={pick === "(선택 없음)"}>
+                중도해지 처리(원금 지급)
+              </Btn>
+            </Cols>
           )}
           <ErrorBox>{err}</ErrorBox>
         </>
