@@ -392,7 +392,7 @@ export async function listAccounts(db) {
 let _lastAutoRun = 0;
 export async function runAutoPayouts(db, { force = false } = {}) {
   const now = Date.now();
-  if (!force && now - _lastAutoRun < 15000) return;
+  if (!force && now - _lastAutoRun < 60000) return;
   _lastAutoRun = now;
   try {
     const nowD = new Date();

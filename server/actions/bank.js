@@ -201,12 +201,13 @@ export default {
     const amount = dep > 0 ? dep : wd;
     const signed = dep > 0 ? amount : -amount;
     const studs = await db.collection("students").find({ is_active: true }, { projection: { _id: 1 } }).toArray();
-    let count = 0;
-    for (const s of studs) {
-      const doc = await applyBalance(db, s._id, signed);
-      await insertTx(db, { sid: s._id, type: dep > 0 ? "deposit" : "withdraw", amount: signed, balanceAfter: toInt(doc && doc.balance), memo, recorder });
-      count += 1;
-    }
+    await Promise.all(
+      studs.map(async (s) => {
+        const doc = await applyBalance(db, s._id, signed);
+        await insertTx(db, { sid: s._id, type: dep > 0 ? "deposit" : "withdraw", amount: signed, balanceAfter: toInt(doc && doc.balance), memo, recorder });
+      })
+    );
+    const count = studs.length;
     if (treasury && count > 0) {
       await treasuryApply(db, { memo: `전체 ${memo}`.trim(), signed: dep > 0 ? -(dep * count) : wd * count, actor: "전체", recorder });
     }
@@ -234,15 +235,17 @@ export default {
     const recorder = adminRecorder(ctx);
     let okCnt = 0;
     const fails = [];
-    for (const sid of sids) {
-      const d = disp[sid] || sid;
-      try {
-        await adminTx(db, { sid, memo, deposit: dep, withdraw: wd, applyTreasury: !!treasury, treasuryMemo: `${d} ${memo}`.trim(), actor: d, recorder });
-        okCnt += 1;
-      } catch (e) {
-        fails.push(e.userMessage || String(e.message || e));
-      }
-    }
+    await Promise.all(
+      sids.map(async (sid) => {
+        const d = disp[sid] || sid;
+        try {
+          await adminTx(db, { sid, memo, deposit: dep, withdraw: wd, applyTreasury: !!treasury, treasuryMemo: `${d} ${memo}`.trim(), actor: d, recorder });
+          okCnt += 1;
+        } catch (e) {
+          fails.push(e.userMessage || String(e.message || e));
+        }
+      })
+    );
     if (okCnt === 0) fail("적용 실패: " + (fails[0] || "알 수 없는 오류"));
     return { ok_cnt: okCnt, mode: isDeposit ? "deposit" : "withdraw" };
   },

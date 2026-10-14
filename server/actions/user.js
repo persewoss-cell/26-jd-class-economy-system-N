@@ -17,8 +17,27 @@ async function recent(db, name, field, limit) {
 }
 
 async function buildLogs(db, perSource, maxRows) {
+  // 모든 출처를 동시에 요청 (하나씩 기다리지 않음)
+  const jobs = {
+    _students: db.collection("students").find({}).toArray(),
+    transactions: recent(db, "transactions", "created_at", perSource),
+    treasury_ledger: recent(db, "treasury_ledger", "created_at", perSource),
+    mart_ledger: recent(db, "mart_ledger", "approved_at", perSource),
+    payroll_log: recent(db, "payroll_log", "paid_at", perSource),
+    stat_submissions: recent(db, "stat_submissions", "created_at", perSource),
+    auction_admin_ledger: recent(db, "auction_admin_ledger", "created_at", perSource),
+    lottery_admin_ledger: recent(db, "lottery_admin_ledger", "created_at", perSource),
+    schedule_items: recent(db, "schedule_items", "created_at", perSource),
+    deposit_requests: recent(db, "deposit_requests", "created_at", perSource),
+    savings: recent(db, "savings", "start_date", perSource),
+    students: recent(db, "students", "updated_at", perSource),
+    mart_requests: recent(db, "mart_requests", "created_at", perSource),
+    credit_adjustments: recent(db, "credit_adjustments", "created_at", perSource),
+  };
+  const vals = await Promise.all(Object.values(jobs));
+  const P = Object.fromEntries(Object.keys(jobs).map((k, i) => [k, vals[i]]));
   const smap = {};
-  for (const d of await db.collection("students").find({}).toArray()) smap[String(d._id)] = { name: str(d.name), no: toInt(d.no) };
+  for (const d of await P._students) smap[String(d._id)] = { name: str(d.name), no: toInt(d.no) };
   const t = (v) => (toDate(v) ? fmtKrDatetimeNoYear(v) : "");
   const ts = (v) => toDate(v)?.getTime() || 0;
   const who = (sid) => {
@@ -28,33 +47,33 @@ async function buildLogs(db, perSource, maxRows) {
   const rows = [];
   const push = (r, sortV) => rows.push({ ...r, _s: sortV });
 
-  for (const x of await recent(db, "transactions", "created_at", perSource)) {
+  for (const x of await P.transactions) {
     const amt = toInt(x.amount);
     push({ 시간: t(x.created_at), 탭: "💰입금/출금", 내역: str(x.memo), 입금: amt > 0 ? amt : 0, 출금: amt < 0 ? -amt : 0, 기록자: str(x.recorder) || "-", 대상: who(str(x.student_id)), 분류: str(x.type), 변경후잔액: toInt(x.balance_after) }, ts(x.created_at));
   }
-  for (const x of await recent(db, "treasury_ledger", "created_at", perSource)) {
+  for (const x of await P.treasury_ledger) {
     const actor = str(x.actor) || "국고";
     push({ 시간: t(x.created_at), 탭: "🏛️ 국세청(국고)", 내역: str(x.memo), 입금: toInt(x.income), 출금: toInt(x.expense), 기록자: str(x.recorder) || "-", 대상: actor.toLowerCase() === "system_salary" ? "시스템(월급)" : actor, 분류: str(x.type), 변경후잔액: toInt(x.balance_after) }, ts(x.created_at));
   }
-  for (const x of await recent(db, "mart_ledger", "approved_at", perSource)) {
+  for (const x of await P.mart_ledger) {
     push({ 시간: t(x.approved_at), 탭: "🛒마트", 내역: `마트 구매 승인: ${str(x.item)}`, 입금: 0, 출금: toInt(x.price), 기록자: str(x.approved_by) || "관리자", 대상: `${toInt(x.student_no)}번 ${str(x.student_name)}`, 분류: "mart_approved", 변경후잔액: "" }, ts(x.approved_at));
   }
-  for (const x of await recent(db, "payroll_log", "paid_at", perSource)) {
+  for (const x of await P.payroll_log) {
     push({ 시간: t(x.paid_at), 탭: "💼 직업/월급", 내역: `월급 지급 (${str(x.job) || "-"})`, 입금: toInt(x.amount), 출금: 0, 기록자: "관리자", 대상: who(str(x.student_id)), 분류: str(x.method) || "payroll", 변경후잔액: "" }, ts(x.paid_at));
   }
-  for (const x of await recent(db, "stat_submissions", "created_at", perSource)) {
+  for (const x of await P.stat_submissions) {
     push({ 시간: t(x.created_at), 탭: "📊 통계청", 내역: `제출물 생성/수정: ${str(x.label)}`, 입금: 0, 출금: 0, 기록자: "관리자", 대상: "전체", 분류: "stat_submission", 변경후잔액: "" }, ts(x.created_at));
   }
-  for (const x of await recent(db, "auction_admin_ledger", "created_at", perSource)) {
+  for (const x of await P.auction_admin_ledger) {
     push({ 시간: t(x.created_at), 탭: "🏷️ 경매", 내역: `경매 ${toInt(x.round_no)}회 장부 반영`, 입금: toInt(x.total_amount), 출금: 0, 기록자: "관리자", 대상: "국고", 분류: "auction_ledger", 변경후잔액: "" }, ts(x.created_at));
   }
-  for (const x of await recent(db, "lottery_admin_ledger", "created_at", perSource)) {
+  for (const x of await P.lottery_admin_ledger) {
     push({ 시간: t(x.created_at), 탭: "🍀 복권", 내역: `복권 ${toInt(x.round_no)}회 장부 반영`, 입금: toInt(x.national_amount), 출금: 0, 기록자: "관리자", 대상: "국고", 분류: "lottery_ledger", 변경후잔액: "" }, ts(x.created_at));
   }
-  for (const x of await recent(db, "schedule_items", "created_at", perSource)) {
+  for (const x of await P.schedule_items) {
     push({ 시간: t(x.created_at), 탭: "🗓️ 일정", 내역: `일정 등록/수정: ${str(x.title)}`, 입금: 0, 출금: 0, 기록자: str(x.recorder) || "관리자", 대상: "전체", 분류: "schedule", 변경후잔액: "" }, ts(x.created_at));
   }
-  for (const x of await recent(db, "deposit_requests", "created_at", perSource)) {
+  for (const x of await P.deposit_requests) {
     const status = str(x.status || "pending").trim().toLowerCase();
     const label = `${toInt(x.no)}번 ${str(x.name)}`.trim();
     const memo = str(x.memo);
@@ -64,7 +83,7 @@ async function buildLogs(db, perSource, maxRows) {
       push({ 시간: t(x.processed_at), 탭: "✅ 입금 승인", 내역: `입금 신청 처리(${status}): ${memo}`, 입금: status === "approved" ? amount : 0, 출금: 0, 기록자: "관리자", 대상: label || "-", 분류: status, 변경후잔액: "" }, ts(x.processed_at));
     }
   }
-  for (const x of await recent(db, "savings", "start_date", perSource)) {
+  for (const x of await P.savings) {
     const sid = str(x.student_id);
     const status = str(x.status || "active").trim().toLowerCase();
     const weeks = toInt(x.weeks);
@@ -79,7 +98,7 @@ async function buildLogs(db, perSource, maxRows) {
       push({ 시간: t(c), 탭: "🏦 은행(적금)", 내역: `적금 중도해지(${weeks}주)`, 입금: principal, 출금: 0, 기록자: "사용자", 대상: who(sid), 분류: "canceled", 변경후잔액: "" }, ts(c) || ts(start));
     }
   }
-  for (const x of await recent(db, "students", "updated_at", perSource)) {
+  for (const x of await P.students) {
     if (!toDate(x.updated_at)) continue;
     const extras = Array.isArray(x.extra_permissions) ? x.extra_permissions : [];
     for (const p0 of extras) {
@@ -88,7 +107,7 @@ async function buildLogs(db, perSource, maxRows) {
       push({ 시간: t(x.updated_at), 탭: "⭐ 권한부여", 내역: `권한 보유 상태: ${p}`, 입금: 0, 출금: 0, 기록자: "관리자", 대상: `${toInt(x.no)}번 ${str(x.name) || x._id}`, 분류: p.startsWith("tab::") ? "tab_permission" : p.startsWith("admin::") ? "admin_permission" : "updated", 변경후잔액: "" }, ts(x.updated_at));
     }
   }
-  for (const x of await recent(db, "mart_requests", "created_at", perSource)) {
+  for (const x of await P.mart_requests) {
     const status = str(x.status || "pending").trim().toLowerCase();
     const lab = `${toInt(x.student_no)}번 ${str(x.student_name)}`;
     push({ 시간: t(x.created_at), 탭: "🛒마트", 내역: `구매 요청: ${str(x.item)}`, 입금: 0, 출금: toInt(x.price), 기록자: lab, 대상: lab, 분류: "pending", 변경후잔액: "" }, ts(x.created_at));
@@ -96,7 +115,7 @@ async function buildLogs(db, perSource, maxRows) {
       push({ 시간: t(x.rejected_at), 탭: "🛒마트", 내역: `구매 요청 거절: ${str(x.item)}`, 입금: 0, 출금: 0, 기록자: "관리자", 대상: lab, 분류: "rejected", 변경후잔액: "" }, ts(x.rejected_at) || ts(x.created_at));
     }
   }
-  for (const x of await recent(db, "credit_adjustments", "created_at", perSource)) {
+  for (const x of await P.credit_adjustments) {
     const d = toInt(x.delta);
     push({ 시간: t(x.created_at), 탭: "💳 신용등급", 내역: `신용점수 수동 조정 (${d >= 0 ? "+" : ""}${d}점, 조정후 ${toInt(x.score_after)}점/${toInt(x.grade_after)}등급)`, 입금: 0, 출금: 0, 기록자: str(x.recorder) || "관리자", 대상: who(str(x.student_id)), 분류: "credit_adjust", 변경후잔액: "" }, ts(x.created_at));
   }

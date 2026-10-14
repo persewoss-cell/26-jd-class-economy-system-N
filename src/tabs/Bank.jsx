@@ -1,5 +1,5 @@
 // 🏦 내 통장 (관리자: 💰입금/출금 / 학생: 📝 통장/거래 / 권한학생: ⍟💰입금/출금(관리자))
-import React, { useMemo, useRef, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { api } from "../lib/api.js";
 import { readExcel, downloadExcel } from "../lib/excel.js";
 import {
@@ -293,27 +293,35 @@ export function BankAdmin() {
   const templates = (tpls.data && tpls.data.templates) || [];
   const accounts = useLoad("accounts_list", {}, [app.ver]);
 
-  // 국고 반영: 탭을 열 때 팝업으로 한 번 물어보고, 고른 값이 저장 후에도 기본값으로 유지됨
-  const treasuryRef = useRef(false);
-  const [askTreasury, setAskTreasury] = useState(true);
+  // 국고 반영: 체크칸을 직접 누르지 않았으면 입금/출금을 누를 때 "국고에 반영할까요?" 팝업
+  const [askTreasury, setAskTreasury] = useState(null); // { run: (treasury) => Promise }
+  // 입력 확인이 끝난 뒤 호출: 직접 체크했으면 그 값, 아니면 팝업으로 물어본 뒤 진행. true를 돌려주면 "물어보는 중"
+  const needAsk = (form, again) => {
+    if (form.treasuryTouched) return false;
+    setAskTreasury({ run: again });
+    return true;
+  };
   const answerTreasury = (yes) => {
-    treasuryRef.current = yes;
-    setBForm((f) => ({ ...f, treasury: yes }));
-    setPForm((f) => ({ ...f, treasury: yes }));
-    setAskTreasury(false);
+    const a = askTreasury;
+    setAskTreasury(null);
+    if (a) a.run(yes);
   };
 
   // 전체
-  const [bForm, setBForm, bReset] = useTradeForm(treasuryRef);
+  const [bForm, setBForm, bReset] = useTradeForm(false);
   const [bErr, setBErr] = useState("");
   const [undo, setUndo] = useState(false);
-  const saveBulk = async (dir) => {
+  const saveBulk = async (dir, treasury) => {
     setBErr("");
     const { memo } = bForm;
     const { dep, wd } = splitAmount(dir, bForm.amount);
     if (!(bForm.amount > 0)) return setBErr("금액을 입력해 주세요.");
     if (!memo.trim()) return setBErr("내역(메모)을 입력해 주세요.");
-    const r = await api("bank_bulk", { memo: memo.trim(), dep, wd, treasury: bForm.treasury });
+    if (treasury === undefined) {
+      if (needAsk(bForm, (t) => saveBulk(dir, t))) return;
+      treasury = bForm.treasury;
+    }
+    const r = await api("bank_bulk", { memo: memo.trim(), dep, wd, treasury });
     if (r.ok) {
       if (r.mode === "deposit") app.toast(`일괄 지급 완료! (${r.count}명)`, "🎉");
       else app.toast(`일괄 출금 완료! (적용 ${r.count}명)`, "⚠️");
@@ -324,7 +332,7 @@ export function BankAdmin() {
 
   // 개인
   const [picks, setPicks] = useState({});
-  const [pForm, setPForm, pReset] = useTradeForm(treasuryRef);
+  const [pForm, setPForm, pReset] = useTradeForm(false);
   const [pErr, setPErr] = useState("");
   const accs = useMemo(() => {
     const list = [...((accounts.data && accounts.data.accounts) || [])];
@@ -338,7 +346,7 @@ export function BankAdmin() {
     return list;
   }, [accounts.data]);
   const selected = accs.filter((a) => picks[a.student_id]);
-  const savePersonal = async (dir) => {
+  const savePersonal = async (dir, treasury) => {
     setPErr("");
     const { memo } = pForm;
     const { dep, wd } = splitAmount(dir, pForm.amount);
@@ -349,7 +357,11 @@ export function BankAdmin() {
       app.toast(isDep ? "입금 완료! (0명)" : "출금 완료! (적용 0명)", isDep ? "🎉" : "⚠️");
       return;
     }
-    const r = await api("bank_personal", { sids: selected.map((a) => a.student_id), memo: memo.trim(), dep, wd, treasury: pForm.treasury });
+    if (treasury === undefined) {
+      if (needAsk(pForm, (t) => savePersonal(dir, t))) return;
+      treasury = pForm.treasury;
+    }
+    const r = await api("bank_personal", { sids: selected.map((a) => a.student_id), memo: memo.trim(), dep, wd, treasury });
     if (r.ok) {
       app.toast(isDep ? `입금 완료! (${r.ok_cnt}명)` : `출금 완료! (적용 ${r.ok_cnt}명)`, isDep ? "🎉" : "⚠️");
       setPicks({});
@@ -363,12 +375,12 @@ export function BankAdmin() {
 
   return (
     <>
-      <ConfirmModal open={askTreasury} title="🏛️ 국고 반영" message="국고에 반영할까요?" onYes={() => answerTreasury(true)} onNo={() => answerTreasury(false)} />
+      <ConfirmModal open={!!askTreasury} title="🏛️ 국고 반영" message="국고에 반영할까요?" onYes={() => answerTreasury(true)} onNo={() => answerTreasury(false)} />
       <SubTabs tabs={["개인", "전체"]} active={sub} onChange={setSub} />
       {sub === "전체" ? (
         <>
           <H3>🎁 전체 일괄 입금/출금</H3>
-          <TradeForm form={bForm} setForm={setBForm} templates={templates} onAction={saveBulk} />
+          <TradeForm form={bForm} setForm={setBForm} templates={templates} onAction={(dir) => saveBulk(dir)} />
           <Btn onClick={() => setUndo((v) => !v)}>되돌리기(관리자)</Btn>
           <ErrorBox>{bErr}</ErrorBox>
           {undo ? <RollbackPanel mode="admin" /> : null}
@@ -398,7 +410,7 @@ export function BankAdmin() {
               ))}
               {selected.length ? <Caption>선택됨: {selected.map((a) => a.name).join(" · ")}</Caption> : null}
               <H3>🎁 개인 입금/출금</H3>
-              <TradeForm form={pForm} setForm={setPForm} templates={templates} onAction={savePersonal} />
+              <TradeForm form={pForm} setForm={setPForm} templates={templates} onAction={(dir) => savePersonal(dir)} />
               <ErrorBox>{pErr}</ErrorBox>
             </>
           ) : null}

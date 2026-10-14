@@ -6,15 +6,56 @@ export const AppCtx = createContext(null);
 export const useApp = () => useContext(AppCtx);
 
 // 서버 데이터 불러오기
+// 한 번 불러온 화면은 기억해 두었다가 탭을 다시 열면 바로 보여주고, 뒤에서 최신으로 바꿈
+const _cache = new Map();
+const _inflight = new Map();
+const cacheKey = (action, args) => `${action}|${JSON.stringify(args || {})}`;
+function fetchShared(action, args) {
+  const k = cacheKey(action, args);
+  if (_inflight.has(k)) return _inflight.get(k);
+  const p = api(action, args).then((r) => {
+    _inflight.delete(k);
+    if (r.ok) _cache.set(k, r);
+    return r;
+  });
+  _inflight.set(k, p);
+  return p;
+}
+// 로그인 직후 자주 쓰는 화면을 미리 불러 둠
+export function prefetch(list) {
+  const queue = list.filter(([a, g]) => !_cache.has(cacheKey(a, g)));
+  const worker = async () => {
+    while (queue.length) {
+      const [a, g] = queue.shift();
+      await fetchShared(a, g);
+    }
+  };
+  for (let i = 0; i < 3; i++) worker(); // 동시에 3개씩만
+}
+export function clearLoadCache() {
+  _cache.clear();
+}
+
 export function useLoad(action, args = {}, deps = []) {
-  const [state, setState] = useState({ data: null, loading: true, error: "" });
+  const [state, setState] = useState(() => {
+    const c = _cache.get(cacheKey(action, args));
+    return c ? { data: c, loading: false, error: "" } : { data: null, loading: true, error: "" };
+  });
   const argsRef = useRef(args);
   argsRef.current = args;
   const seq = useRef(0);
   const reload = useCallback(async () => {
     const my = ++seq.current;
-    setState((s) => ({ ...s, loading: true }));
-    const r = await api(action, argsRef.current);
+    const c = _cache.get(cacheKey(action, argsRef.current));
+    setState((s) => (c ? { data: c, loading: true, error: "" } : { ...s, loading: true }));
+    // 처음 열 때는 미리 불러 둔 요청을 같이 쓰고, 그 뒤(저장 후 새로고침 등)는 항상 새로 요청
+    const r =
+      my === 1
+        ? await fetchShared(action, argsRef.current)
+        : await api(action, argsRef.current).then((x) => {
+            if (x.ok) _cache.set(cacheKey(action, argsRef.current), x);
+            return x;
+          });
     if (my !== seq.current) return r;
     if (r.ok) setState({ data: r, loading: false, error: "" });
     else setState({ data: null, loading: false, error: r.error || "불러오기 실패" });

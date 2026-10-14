@@ -315,3 +315,4 @@ table.ledger { border-collapse: separate; border-spacing: 0; font-size: 0.92rem;
 .ledger tr.lg-bulk td { background: #fffbeb; border-bottom: 2px solid #e5e7eb; }
 .ledger tr.lg-avg td { background: #f8f9fb; font-weight: 700; }
 .ledger tbody tr:hover td { background: #fafbfc; }
+.round-btns .rb.clear { width: auto; padding: 0 1rem; font-size: 0.9rem; color: var(--muted); }

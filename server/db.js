@@ -17,7 +17,28 @@ export async function getDb() {
   }
   const client = await _clientPromise;
   _db = client.db(dbName);
+  ensureIndexes(_db);
   return _db;
+}
+
+// 조회를 빠르게 하는 색인 (데이터는 바꾸지 않음, 이미 있으면 아무 일도 안 함). 응답을 기다리게 하지 않음
+function ensureIndexes(db) {
+  const list = [
+    ["transactions", { student_id: 1, created_at: -1 }],
+    ["transactions", { created_at: -1 }],
+    ["savings", { student_id: 1 }],
+    ["savings", { status: 1 }],
+    ["invest_ledger", { student_id: 1 }],
+    ["invest_price_history", { product_id: 1 }],
+    ["stat_submissions", { created_at: -1 }],
+    ["treasury_ledger", { created_at: -1 }],
+    ["credit_adjustments", { created_at: -1 }],
+    ["lottery_entries", { round_id: 1 }],
+    ["auction_bids", { round_id: 1 }],
+    ["deposit_requests", { status: 1 }],
+    ["mart_requests", { status: 1 }],
+  ];
+  for (const [c, key] of list) db.collection(c).createIndex(key).catch(() => {});
 }
 
 export function newId() {

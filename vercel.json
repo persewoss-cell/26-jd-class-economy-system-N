@@ -3,12 +3,23 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "functions": {
-    "api/index.js": { "maxDuration": 60 }
+    "api/index.js": {
+      "maxDuration": 60
+    }
   },
   "rewrites": [
-    { "source": "/((?!api|assets).*)", "destination": "/index.html" }
+    {
+      "source": "/((?!api|assets).*)",
+      "destination": "/index.html"
+    }
   ],
   "crons": [
-    { "path": "/api?action=system_tick", "schedule": "5 15 * * *" }
+    {
+      "path": "/api?action=system_tick",
+      "schedule": "5 15 * * *"
+    }
+  ],
+  "regions": [
+    "icn1"
   ]
 }

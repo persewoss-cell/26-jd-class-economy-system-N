@@ -2,29 +2,33 @@
 import React, { useState } from "react";
 import { Cols, Btn, TextInput, NumberInput, Select, Checkbox } from "./ui.jsx";
 
-const QUICK = [0, 10, 20, 50, 100, 200, 500, 1000];
+const QUICK = [10, 20, 50, 100, 200, 500, 1000];
 
 export const templateDisplay = (t) => `${t.label}[${t.kind === "deposit" ? "입금" : "출금"} ${parseInt(t.amount, 10) || 0}]`;
 export const treasuryTemplateDisplay = (t) => `${t.label}[${t.kind === "income" ? "세입" : "세출"} ${parseInt(t.amount, 10) || 0}]`;
 
 // 금액칸 하나 + 맨 아래 [입금] [출금] 버튼. 버튼을 누르는 순간 방향이 정해져서 (+)/(-) 전환을 깜빡할 일이 없음.
-// treasuryRef: 관리자 화면에서 팝업으로 고른 "국고 반영" 기본값(저장 후 초기화해도 유지)
-export function useTradeForm(treasuryRef) {
-  const init = () => ({ tpl: "(직접 입력)", memo: "", treasury: treasuryRef ? treasuryRef.current : true, amount: 0, hint: "" });
+// treasuryDefault: 국고 반영 처음 상태(학생 true / 관리자 false → 입금·출금 누를 때 팝업으로 물어봄)
+// treasuryTouched: 체크칸을 직접 눌렀는지 (눌렀으면 팝업 없이 그 상태로 반영)
+export function useTradeForm(treasuryDefault = true) {
+  const init = () => ({ tpl: "(직접 입력)", memo: "", treasury: treasuryDefault, treasuryTouched: false, amount: 0, hint: "" });
   const [f, setF] = useState(init);
   return [f, setF, () => setF(init())];
 }
 export const useTreasuryForm = () => useTradeForm();
 
-// 빠른 금액 원형 버튼: 누를 때마다 더해짐, 0은 초기화
+// 빠른 금액 원형 버튼: 누를 때마다 더해짐, [지우기]는 0으로
 function RoundButtons({ onPick }) {
   return (
     <div className="round-btns" role="group" aria-label="빠른 금액">
       {QUICK.map((a) => (
         <div key={a} className="rb" onClick={() => onPick(a)}>
-          {a}
+          +{a}
         </div>
       ))}
+      <div className="rb clear" onClick={() => onPick(0)}>
+        지우기
+      </div>
     </div>
   );
 }
@@ -37,7 +41,7 @@ function AmountForm({ form, setForm, tplLabel, tplOptions, onTpl, showTreasury, 
     <>
       <Select label={tplLabel} value={form.tpl} options={tplOptions} onChange={onTpl} />
       <TextInput label="내역" value={form.memo} onChange={(v) => setForm((f) => ({ ...f, memo: v }))} />
-      {showTreasury ? <Checkbox label="국고 반영" checked={form.treasury} onChange={(v) => setForm((f) => ({ ...f, treasury: v }))} /> : null}
+      {showTreasury ? <Checkbox label="국고 반영" checked={form.treasury} onChange={(v) => setForm((f) => ({ ...f, treasury: v, treasuryTouched: true }))} /> : null}
       <Cols w={[1, 1.5]} va="bottom">
         <NumberInput label="금액" min={0} value={form.amount} onChange={(v) => setForm((f) => ({ ...f, amount: v }))} />
         <RoundButtons onPick={onPick} />

@@ -49,8 +49,8 @@ export default async function handler(req, res) {
     const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
     const ctx = await buildCtx(db, token, { checkPin: action === "session" });
 
-    // 기존 앱처럼 화면을 열 때마다 자동 적금 만기/월급 지급 시도(서버에서 15초에 한 번으로 제한)
-    await runAutoPayouts(db);
+    // 자동 적금 만기/월급 지급: 로그인·새로고침(세션 확인) 때만 시도 (탭을 누를 때마다 하지 않아 빠름)
+    if (action === "session" || action === "login") await runAutoPayouts(db);
 
     const data = await fn(ctx, args);
     return res.status(200).json({ ok: true, ...(data || {}) });

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, getToken, setToken, remember, onBusy } from "./lib/api.js";
-import { AppCtx, Cols, TextInput, Checkbox, Btn, ErrorBox, Subheader, Toasts, Loading, useLoad, Info } from "./components/ui.jsx";
+import { AppCtx, Cols, TextInput, Checkbox, Btn, ErrorBox, Subheader, Toasts, Loading, useLoad, Info, prefetch, clearLoadCache } from "./components/ui.jsx";
 import Sidebar from "./components/Sidebar.jsx";
 import UserHeader from "./components/UserHeader.jsx";
 import { BankAdmin, BankStudent } from "./tabs/Bank.jsx";
@@ -21,6 +21,29 @@ import UserStatsCredit from "./tabs/UserStatsCredit.jsx";
 import Goal from "./tabs/Goal.jsx";
 
 const APP_TITLE = "🏫학급 경제 시스템🪙";
+
+// 탭별로 화면이 처음 불러오는 데이터 (로그인 직후 미리 불러 두면 탭을 누를 때 바로 뜸)
+const TAB_LOADS = {
+  "🏦 내 통장": (admin) => (admin ? [["templates_list", {}], ["accounts_list", {}]] : [["templates_list", {}], ["tx_list", { limit: 300 }]]),
+  "admin::🏦 내 통장": () => [["templates_list", {}], ["accounts_list", {}]],
+  "🔎 개별조회": () => [["individual_students", {}]],
+  "💼 직업/월급": () => [["jobs_load", {}]],
+  "🏛️ 국세청(국고)": () => [["treasury_load", {}]],
+  "📊 통계청": () => [["stats_load", {}]],
+  "💳 신용등급": () => [["credit_load", {}]],
+  "🏦 은행(적금)": (admin) => (admin ? [["dep_req_list", {}], ["bank_load", { admin_mode: true }]] : [["bank_load", { admin_mode: false }]]),
+  "admin::🏦 은행(적금)": () => [["dep_req_list", {}], ["bank_load", { admin_mode: true }]],
+  "📈 투자": (admin) => [["invest_load", { admin_mode: admin }]],
+  "admin::📈 투자": () => [["invest_load", { admin_mode: true }]],
+  "⭐ 권한부여": () => [["perm_load", {}]],
+  "👥 계정 정보": () => [["acc_load", {}]],
+  "🛒마트": (admin) => [[admin ? "mart_admin_load" : "mart_user_load", {}]],
+  "admin::🛒마트": () => [["mart_admin_load", {}]],
+  "🏷️ 경매": (admin) => (admin ? [["auction_admin_load", { pick_round_id: "" }]] : [["auction_user_load", {}]]),
+  "🍀 복권": (admin) => (admin ? [] : [["lottery_user_load", {}]]),
+  "📊 통계/신용": () => [["user_stats_credit", {}]],
+  "🎯 목표": () => [["goal_load", {}]],
+};
 
 export const ALL_TABS = [
   "🏦 내 통장", "🔎 개별조회", "💼 직업/월급", "🏛️ 국세청(국고)", "📊 통계청", "💳 신용등급", "🏦 은행(적금)",
@@ -213,12 +236,26 @@ export default function App() {
   }, [loadSession]);
 
   const tabs = useMemo(() => buildTabs(user), [user]);
+  const prefetched = useRef("");
+  useEffect(() => {
+    if (!user) return;
+    const who = `${user.role}:${user.sid || ""}`;
+    if (prefetched.current === who) return;
+    prefetched.current = who;
+    const admin = user.role === "admin";
+    const list = [];
+    if (!admin) list.push(["user_header", {}]);
+    for (const k of tabs.keys) list.push(...((TAB_LOADS[k] && TAB_LOADS[k](admin)) || []));
+    prefetch(list);
+  }, [user, tabs]);
   useEffect(() => {
     if (!user) return;
     if (!active || !tabs.keys.includes(active)) setActive(tabs.keys[0] || null);
   }, [user, tabs, active]);
 
   const onLogin = async (token, [msg, icon]) => {
+    clearLoadCache();
+    prefetched.current = "";
     setToken(token);
     setActive(null);
     await loadSession();
@@ -226,6 +263,8 @@ export default function App() {
   };
 
   const logout = () => {
+    clearLoadCache();
+    prefetched.current = "";
     setToken("");
     setUser(null);
     setActive(null);
@@ -261,10 +300,7 @@ export default function App() {
                           key={k}
                           className={`mm ${k === active ? "on" : ""}`}
                           onClick={() => {
-                            if (k !== active) {
-                              setActive(k);
-                              loadSession();
-                            }
+                            if (k !== active) setActive(k);
                           }}
                         >
                           <span>{tabs.labels[k] || k}</span>
