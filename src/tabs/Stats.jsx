@@ -1,7 +1,7 @@
 // 📊 통계청 (제출물 O/X/△ 관리) — 클릭은 화면에서만 바뀌고 [✅ 저장]을 눌러야 DB 반영
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
-import { useApp, useLoad, Cols, H3, Btn, TextInput, Select, NumberInput, Checkbox, Info, Warning, ErrorBox, SectionDivider, Loading, TplEditor } from "../components/ui.jsx";
+import { useApp, useLoad, Cols, H3, Btn, TextInput, Select, NumberInput, Checkbox, Info, ErrorBox, SectionDivider, Loading, TplEditor, ConfirmModal } from "../components/ui.jsx";
 
 export function OX({ value, onPick, disabled }) {
   return (
@@ -192,35 +192,41 @@ export default function Stats() {
         <Info>제출물 내역이 없습니다. 위에서 ‘제출물 내역 추가’를 먼저 해주세요.</Info>
       ) : (
         <>
-          {resetConfirm ? (
-            <>
-              <ErrorBox>⚠️ 초기화하면 모든 제출물 내역(열)이 전부 삭제됩니다. 진행할까요?</ErrorBox>
-              <TextInput label="관리자 비밀번호 입력" type="password" value={resetPin} onChange={setResetPin} />
-              <Cols w={2}>
-                <Btn onClick={doReset}>예(전체 삭제)</Btn>
-                <Btn
-                  onClick={() => {
-                    setResetConfirm(false);
-                    setResetPin("");
-                  }}
-                >
-                  아니오
-                </Btn>
-              </Cols>
-            </>
-          ) : null}
-          {delConfirm ? (
-            <>
-              <Warning>삭제할 제출물을 체크하세요. (여러 개 선택 가능)</Warning>
+          <ConfirmModal
+            open={resetConfirm}
+            title="🧹 통계 장부 초기화"
+            message="모든 제출물 내역(열)이 전부 삭제됩니다. 진행할까요?"
+            yesText="예(전체 삭제)"
+            onYes={doReset}
+            onNo={() => {
+              setResetConfirm(false);
+              setResetPin("");
+              setErr("");
+            }}
+          >
+            <TextInput label="관리자 비밀번호" type="password" value={resetPin} onChange={setResetPin} onEnter={doReset} />
+            <ErrorBox>{err}</ErrorBox>
+          </ConfirmModal>
+          <ConfirmModal
+            open={delConfirm}
+            wide
+            title="🗑️ 제출물 삭제"
+            message="삭제할 제출물을 체크하세요."
+            yesText="삭제"
+            noText="취소"
+            onYes={doDelete}
+            onNo={() => {
+              setDelConfirm(false);
+              setErr("");
+            }}
+          >
+            <div className="check-list">
               {subs.map((s) => (
                 <Checkbox key={s.submission_id} label={`${s.date_display} | ${s.label}`} checked={!!delChecks[s.submission_id]} onChange={(v) => setDelChecks((c) => ({ ...c, [s.submission_id]: v }))} />
               ))}
-              <Cols w={2}>
-                <Btn onClick={doDelete}>예</Btn>
-                <Btn onClick={() => setDelConfirm(false)}>아니오</Btn>
-              </Cols>
-            </>
-          ) : null}
+            </div>
+            <ErrorBox>{err}</ErrorBox>
+          </ConfirmModal>
 
           <LedgerGrid
             subs={subs}

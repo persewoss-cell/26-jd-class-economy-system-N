@@ -121,24 +121,23 @@ function PayrollBox({ data, reload }) {
         <Btn onClick={saveCfg}>✅ 지급 설정 저장</Btn>
         <Btn onClick={() => (data.already_any ? setConfirm(true) : doPay(false))}>💸 수동지급(이번 달 즉시 지급, 기지급 시 확인 후 지급)</Btn>
       </Cols>
-      {confirm ? (
-        <>
-          <Warning>이번 달에 이미 월급 지급(자동/수동)한 기록이 있습니다. 그래도 지급하시겠습니까?</Warning>
-          <TextInput label="관리자 비밀번호(PIN)" type="password" value={pin} onChange={setPin} />
-          <Cols w={2}>
-            <Btn onClick={() => doPay(true)}>예</Btn>
-            <Btn
-              onClick={() => {
-                setConfirm(false);
-                app.toast("수동지급 취소", "🛑");
-              }}
-            >
-              아니오
-            </Btn>
-          </Cols>
-        </>
-      ) : null}
-      <ErrorBox>{err}</ErrorBox>
+      <ConfirmModal
+        open={confirm}
+        title="💸 월급 재지급"
+        message="이번 달에 이미 월급 지급(자동/수동)한 기록이 있어요. 그래도 지급할까요?"
+        yesText="지급"
+        noText="취소"
+        onYes={() => doPay(true)}
+        onNo={() => {
+          setConfirm(false);
+          setErr("");
+          app.toast("수동지급 취소", "🛑");
+        }}
+      >
+        <TextInput label="관리자 비밀번호(PIN)" type="password" value={pin} onChange={setPin} onEnter={() => doPay(true)} />
+        <ErrorBox>{confirm ? err : ""}</ErrorBox>
+      </ConfirmModal>
+      <ErrorBox>{confirm ? "" : err}</ErrorBox>
       {warn ? <Warning>{warn}</Warning> : null}
 
       <hr className="divider" />
@@ -162,31 +161,29 @@ function PayrollBox({ data, reload }) {
         </Btn>
       </Cols>
       {!data.paid_this_month ? <Caption>⚠️ 이번달 월급 지급이 되지 않아서 처리할 수 없습니다.</Caption> : null}
-      {fixMode === "dup" ? (
-        <>
-          <ErrorBox>중복 월급 회수(정정)를 실행합니다. 실행 후에는 되돌릴 수 없으니 관리자 PIN을 입력하세요.</ErrorBox>
-          <TextInput label="관리자 비밀번호(PIN)" type="password" value={fixPin} onChange={setFixPin} />
-          <Cols w={2}>
-            <Btn onClick={runFix}>정정 실행</Btn>
-            <Btn onClick={() => setFixMode(null)}>취소</Btn>
-          </Cols>
-        </>
-      ) : null}
-      {fixMode === "all" && allPrev ? (
-        allPrev.count === 0 ? (
-          <Info>이번달 지급된 월급이 이미 모두 회수되어, 더 이상 회수할 대상이 없습니다.</Info>
-        ) : (
-          <>
-            <ErrorBox>{`중복 여부와 관계없이 이번 달 지급된 월급 전체(회수 대상 ${allPrev.count}건 · 예상 회수액 ${allPrev.sum}원)를 회수합니다. 국고에 반영된 공제 세입도 함께 되돌립니다. 실행 후에는 되돌릴 수 없으니 관리자 PIN을 입력하세요.`}</ErrorBox>
-            <TextInput label="관리자 비밀번호(PIN)" type="password" value={fixPin} onChange={setFixPin} />
-            <Cols w={2}>
-              <Btn onClick={runFix}>이번달 회수 실행</Btn>
-              <Btn onClick={() => setFixMode(null)}>취소</Btn>
-            </Cols>
-          </>
-        )
-      ) : null}
-      <ErrorBox>{fixErr}</ErrorBox>
+      {fixMode === "all" && allPrev && allPrev.count === 0 ? <Info>이번달 지급된 월급이 이미 모두 회수되어, 더 이상 회수할 대상이 없습니다.</Info> : null}
+      <ConfirmModal
+        open={fixMode === "dup" || (fixMode === "all" && !!allPrev && allPrev.count > 0)}
+        title={fixMode === "all" ? "🗑️ 이번달 월급 전체 회수" : "♻️ 월급 중복 지급 회수"}
+        message={
+          fixMode === "all" && allPrev
+            ? `중복 여부와 관계없이 이번 달 지급된 월급 전체(${allPrev.count}건 · 예상 회수액 ${allPrev.sum}원)를 회수할까요?\n국고에 반영된 공제 세입도 함께 되돌려요.`
+            : "중복으로 지급된 월급을 회수(정정)할까요?"
+        }
+        yesText={fixMode === "all" ? "회수 실행" : "정정 실행"}
+        noText="취소"
+        onYes={runFix}
+        onNo={() => {
+          setFixMode(null);
+          setFixErr("");
+          setFixPin("");
+        }}
+      >
+        <div className="caption center">실행 후에는 되돌릴 수 없어요.</div>
+        <TextInput label="관리자 비밀번호(PIN)" type="password" value={fixPin} onChange={setFixPin} onEnter={runFix} />
+        <ErrorBox>{fixErr}</ErrorBox>
+      </ConfirmModal>
+      <ErrorBox>{fixMode ? "" : fixErr}</ErrorBox>
       {fixFails.length ? (
         <>
           <Warning>{`일부 정정 실패: ${fixFails.length}건`}</Warning>

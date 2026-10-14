@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { api } from "../lib/api.js";
 import { downloadExcel } from "../lib/excel.js";
-import { useApp, useLoad, Cols, H3, Caption, Btn, TextInput, Select, NumberInput, Checkbox, Radio, Info, Warning, ErrorBox, Success, DataTable, Loading } from "../components/ui.jsx";
+import { useApp, useLoad, Cols, H3, Caption, Btn, TextInput, Select, NumberInput, Checkbox, Info, Warning, ErrorBox, Success, DataTable, Loading, ConfirmModal } from "../components/ui.jsx";
 
 const BID_COLS = ["입찰 가격", "입찰일시", "번호", "이름"];
 const pad2 = (n) => String(n).padStart(2, "0");
@@ -147,7 +147,7 @@ function AuctionUser() {
   const app = useApp();
   const { data, error } = useLoad("auction_user_load", {}, [app.ver]);
   const [amt, setAmt] = useState(0);
-  const [confirm, setConfirm] = useState("아니오");
+  const [confirm, setConfirm] = useState(false);
   const [warn, setWarn] = useState("");
   const [err, setErr] = useState("");
   if (error) return <ErrorBox>{error}</ErrorBox>;
@@ -156,7 +156,7 @@ function AuctionUser() {
   const submit = async () => {
     setWarn("");
     setErr("");
-    if (confirm !== "예") return setWarn("제출 전 확인에서 '예'를 선택해 주세요.");
+    setConfirm(false);
     const r = await api("auction_bid", { amount: amt });
     if (r.ok) {
       app.toast("입찰표 제출 완료! 제출 즉시 통장에서 차감되었습니다.", "✅");
@@ -183,9 +183,13 @@ function AuctionUser() {
         <Success>{`입찰표 제출 완료: ${Number(data.prev.amount).toLocaleString("en-US")} 드림 | 제출시각 ${data.prev.submitted_text}`}</Success>
       ) : (
         <>
-          <NumberInput label="입찰 가격(드림)" min={0} value={amt} onChange={setAmt} />
-          <Radio label="입찰표를 제출하시겠습니까?" options={["아니오", "예"]} value={confirm} onChange={setConfirm} />
-          <Btn onClick={submit}>입찰표 제출</Btn>
+          <Cols w={[2, 1]} va="bottom">
+            <NumberInput label="입찰 가격(드림)" min={0} value={amt} onChange={setAmt} />
+            <Btn onClick={() => setConfirm(true)}>📝 입찰표 제출</Btn>
+          </Cols>
+          <ConfirmModal open={confirm} title="🏷️ 입찰표 제출" message={`${Number(amt || 0).toLocaleString("en-US")} 드림으로 입찰표를 제출할까요?`} onYes={submit} onNo={() => setConfirm(false)}>
+            <div className="caption center">제출하면 바로 통장에서 빠져나가고, 다시 고칠 수 없어요.</div>
+          </ConfirmModal>
           {warn ? <Warning>{warn}</Warning> : null}
           <ErrorBox>{err}</ErrorBox>
         </>

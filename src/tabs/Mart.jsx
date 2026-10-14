@@ -41,10 +41,12 @@ export function MartUser() {
   return (
     <>
       <H4>🛍️ 마트 장보기</H4>
-      <Select label="내역 템플릿" value={pick} options={opts} onChange={onPick} />
-      <TextInput label="내역" value={item} onChange={setItem} />
-      <NumberInput label="금액" min={0} value={price} onChange={setPrice} />
-      <Btn onClick={save}>저장</Btn>
+      <Cols w={[1.4, 2, 1, 0.9]} va="bottom">
+        <Select label="내역 템플릿" value={pick} options={opts} onChange={onPick} />
+        <TextInput label="내역" value={item} onChange={setItem} />
+        <NumberInput label="금액" min={0} stepper={false} value={price} onChange={setPrice} />
+        <Btn onClick={save}>🛍️ 구입 요청</Btn>
+      </Cols>
       <ErrorBox>{err}</ErrorBox>
     </>
   );

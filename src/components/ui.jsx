@@ -383,13 +383,15 @@ export function Expander({ title, children, defaultOpen = false }) {
 }
 
 // 가운데 확인 팝업(예/아니오)
-export function ConfirmModal({ open, title, message, yesText = "예", noText = "아니오", onYes, onNo }) {
+// children: 팝업 안에 넣을 추가 내용(관리자 비밀번호 칸, 체크 목록, 오류 문구 등)
+export function ConfirmModal({ open, title, message, yesText = "예", noText = "아니오", onYes, onNo, children, wide }) {
   if (!open) return null;
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={title || message}>
-      <div className="modal">
+      <div className={`modal ${wide ? "confirm-wide" : ""}`}>
         {title ? <div className="modal-title">{title}</div> : null}
         <div className="modal-msg">{message}</div>
+        {children ? <div className="modal-body stack">{children}</div> : null}
         <div className="modal-btns">
           <button type="button" className="btn primary" onClick={onYes}>
             {yesText}

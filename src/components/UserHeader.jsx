@@ -1,6 +1,6 @@
 // 학생 모드: 탭 위 통장/정보 요약 (_render_user_bank_header)
 import React from "react";
-import { useApp, useLoad, Btn } from "./ui.jsx";
+import { useApp, useLoad } from "./ui.jsx";
 
 export default function UserHeader({ onLogout, onPin }) {
   const app = useApp();
@@ -18,19 +18,22 @@ export default function UserHeader({ onLogout, onPin }) {
   return (
     <div className="summary">
       <div className="sum-main">
-        <div className="sum-actions">
-          <Btn full={false} className="ghost" onClick={onPin}>
-            🔑 비밀번호 변경
-          </Btn>
-          <Btn full={false} className="ghost" onClick={onLogout}>
-            로그아웃
-          </Btn>
+        <div className="sum-name">
+          {app.user && app.user.name}
+          <small> 님</small>
         </div>
-        <div className="sum-name">{app.user && app.user.name}</div>
         <div className="sum-label">🧮 총 자산</div>
         <div className="sum-value">
           {h.asset_total}
           <small> 드림</small>
+        </div>
+        <div className="sum-actions">
+          <button type="button" onClick={onPin}>
+            🔑 비밀번호 변경
+          </button>
+          <button type="button" onClick={onLogout}>
+            ↪ 로그아웃
+          </button>
         </div>
       </div>
       <div className="sum-grid">

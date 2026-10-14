@@ -74,7 +74,7 @@ function PriceChart({ points }) {
   const labels = points.map((p) => wrapLabel(p.label, perLine));
   const maxLines = Math.max(1, ...labels.map((l) => l.length));
   const H = padT + plotH + 18 + maxLines * 19;
-  const [lo, hi, ticks] = niceAxis(points.map((p) => p.y));
+  const [, , ticks] = niceAxis(points.map((p) => p.y));
   const x = (i) => padX + band * (i + 0.5);
   // 가장 높은/낮은 점이 테두리에 붙지 않게 위아래 여유
   const vmin = Math.min(...points.map((p) => p.y));
@@ -295,20 +295,22 @@ function BuyForm({ products, onDone }) {
   };
   return (
     <>
-      <Select label="투자 종목 선택" value={pid} options={products.map((p) => ({ value: p.product_id, label: `${p.name} (현재 ${f2(p.current_price)})` }))} onChange={setPid} />
-      <NumberInput label="투자 금액" min={0} step={10} value={amt} onChange={setAmt} />
-      <Btn onClick={ask}>투자하기 (다음 확인창에서 ‘예’를 눌러야 완료, 신중하게 결정하기)</Btn>
+      <Cols w={[2, 1.4, 1]} va="bottom">
+        <Select label="투자 종목 선택" value={pid} options={products.map((p) => ({ value: p.product_id, label: `${p.name} (현재 ${f2(p.current_price)})` }))} onChange={setPid} />
+        <NumberInput label="투자 금액" min={0} step={10} value={amt} onChange={setAmt} />
+        <Btn onClick={ask}>💳 투자하기</Btn>
+      </Cols>
       {warn ? <Warning>{warn}</Warning> : null}
       <ErrorBox>{err}</ErrorBox>
-      {confirm ? (
-        <>
-          <Warning>정말로 투자할까요?</Warning>
-          <Cols w={2}>
-            <Btn onClick={yes}>예</Btn>
-            <Btn onClick={() => setConfirm(false)}>아니오</Btn>
-          </Cols>
-        </>
-      ) : null}
+      <ConfirmModal
+        open={confirm}
+        title="💳 투자하기"
+        message={`${(products.find((p) => p.product_id === pid) || {}).name || ""}에 ${amt}드림을 투자할까요?`}
+        onYes={yes}
+        onNo={() => setConfirm(false)}
+      >
+        <div className="caption center">투자한 돈은 통장에서 바로 빠져나가요. 신중하게 결정하세요!</div>
+      </ConfirmModal>
     </>
   );
 }

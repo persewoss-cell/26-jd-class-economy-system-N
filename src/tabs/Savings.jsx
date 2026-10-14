@@ -1,7 +1,7 @@
 // 🏦 은행(적금) — 관리자: 입금 승인 + 적금 관리 장부 + 중도해지 / 학생: 적금 가입·내역·중도해지 / 공통: 이자율표
 import React, { useEffect, useRef, useState } from "react";
 import { api } from "../lib/api.js";
-import { useApp, useLoad, Cols, H3, H4, Caption, Btn, Select, NumberInput, Checkbox, Metric, Info, Warning, ErrorBox, Expander, DataTable, Loading } from "../components/ui.jsx";
+import { useApp, useLoad, Cols, H3, H4, Caption, Btn, Select, NumberInput, Checkbox, Metric, Info, Warning, ErrorBox, Expander, DataTable, Loading, ConfirmModal } from "../components/ui.jsx";
 
 function DepositApproval() {
   const app = useApp();
@@ -107,6 +107,7 @@ function AdminPart({ data }) {
   const app = useApp();
   const [pick, setPick] = useState("(선택 없음)");
   const [err, setErr] = useState("");
+  const [ask, setAsk] = useState(false);
   const rows = data.rows || [];
   const running = rows.filter((r) => r["처리 결과"] === "진행중").slice(0, 50);
   const opts = ["(선택 없음)", ...running.map((r) => `${r.번호} ${r.이름} | ${r.적금기간} | ${r["적금 날짜"]} | ${r["적금 금액"]}P`)];
@@ -135,11 +136,14 @@ function AdminPart({ data }) {
           ) : (
             <Cols w={[3, 1.2]} va="bottom">
               <Select label="중도해지할 적금" hideLabel value={pick} options={opts} onChange={setPick} />
-              <Btn onClick={cancel} disabled={pick === "(선택 없음)"}>
+              <Btn onClick={() => setAsk(true)} disabled={pick === "(선택 없음)"}>
                 중도해지 처리(원금 지급)
               </Btn>
             </Cols>
           )}
+          <ConfirmModal open={ask} title="🛠️ 관리자 강제 중도해지" message={`${pick}\n이 적금을 중도해지할까요?`} onYes={() => { setAsk(false); cancel(); }} onNo={() => setAsk(false)}>
+            <div className="caption center">원금만 학생 통장으로 돌려주고, 이자는 지급되지 않아요.</div>
+          </ConfirmModal>
           <ErrorBox>{err}</ErrorBox>
         </>
       )}
@@ -164,7 +168,10 @@ function StudentPart({ data }) {
   if (Math.abs(x % 1) === 0.5) it = Math.floor(x) % 2 === 0 ? Math.floor(x) : Math.floor(x) + 1;
   const mat = (parseInt(principal, 10) || 0) + it;
 
+  const [askJoin, setAskJoin] = useState(false);
+  const [askCancel, setAskCancel] = useState(false);
   const join = async () => {
+    setAskJoin(false);
     setErr("");
     if ((parseInt(principal, 10) || 0) > data.balance) return setErr("잔액이 부족해요.");
     const r = await api("savings_join", { weeks: w, principal });
@@ -194,13 +201,24 @@ function StudentPart({ data }) {
     <>
       <H3>📝 적금 가입</H3>
       <Caption>• 적금 가입 시 통장에서 해당 금액이 출금됩니다. • 만기면 원금+이자가 자동 지급됩니다. • 중도해지는 원금만 지급됩니다.</Caption>
-      <Cols w={[1.1, 1.3, 1.6]}>
+      <Cols w={[1, 1.3, 1.3, 1.1]} va="bottom">
         <Select label="적금기간(주)" value={w} options={weeks} onChange={setW} />
         <NumberInput label="적금 금액" min={0} step={10} value={principal} onChange={setPrincipal} />
         <Metric label="미리보기(이자율/만기)" value={`${rate.toFixed(0)}% / ${mat}P`} />
+        <Btn
+          onClick={() => {
+            setErr("");
+            if (!(parseInt(principal, 10) > 0)) return setErr("적금 금액을 입력해 주세요.");
+            setAskJoin(true);
+          }}
+        >
+          🐷 적금 가입
+        </Btn>
       </Cols>
-      <Btn onClick={join}>🏦 적금 가입(저장)</Btn>
       <ErrorBox>{err}</ErrorBox>
+      <ConfirmModal open={askJoin} title="🐷 적금 가입" message={`${principal}드림을 ${w}주 적금에 넣을까요?`} onYes={join} onNo={() => setAskJoin(false)}>
+        <div className="caption center">{`통장에서 ${principal}드림이 빠져나가고, 만기에는 ${mat}드림(이자율 ${rate.toFixed(0)}%)을 받아요.`}</div>
+      </ConfirmModal>
       <H3>📒 내 적금 내역</H3>
       {!rows.length ? (
         <Info>내 적금 내역이 없어요.</Info>
@@ -210,9 +228,16 @@ function StudentPart({ data }) {
           {running.length ? (
             <>
               <H4>⚠️ 중도 해지(원금만 지급)</H4>
-              <Select label="중도 해지할 적금 선택" value={pick} options={opts} onChange={setPick} />
-              {pick !== "(선택 없음)" ? <Btn onClick={cancel}>중도해지 실행</Btn> : null}
+              <Cols w={[3, 1]} va="bottom">
+                <Select label="중도 해지할 적금" hideLabel value={pick} options={opts} onChange={setPick} />
+                <Btn onClick={() => setAskCancel(true)} disabled={pick === "(선택 없음)"}>
+                  중도해지
+                </Btn>
+              </Cols>
               <ErrorBox>{cErr}</ErrorBox>
+              <ConfirmModal open={askCancel} title="⚠️ 적금 중도해지" message={`${pick}\n이 적금을 해지할까요?`} onYes={() => { setAskCancel(false); cancel(); }} onNo={() => setAskCancel(false)}>
+                <div className="caption center">원금만 돌려받고 이자는 없어져요.</div>
+              </ConfirmModal>
             </>
           ) : null}
         </>

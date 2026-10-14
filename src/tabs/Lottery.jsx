@@ -1,7 +1,7 @@
 // 🍀 복권
 import React, { useState } from "react";
 import { api } from "../lib/api.js";
-import { useApp, useLoad, Cols, H3, Caption, Btn, TextInput, Select, NumberInput, Checkbox, Info, Warning, ErrorBox, Success, DataTable, Loading } from "../components/ui.jsx";
+import { useApp, useLoad, Cols, H3, Caption, Btn, TextInput, Select, NumberInput, Checkbox, Info, Warning, ErrorBox, Success, DataTable, Loading, ConfirmModal } from "../components/ui.jsx";
 
 const ENTRY_COLS = ["참여 일시", "번호", "이름", "복권 참여 번호"];
 const SUM_COLS = ["참여자수", "참여 복권수", "총 액수"];
@@ -220,6 +220,7 @@ function LotteryUser() {
   if (!data) return <Loading />;
   const o = data.open;
 
+  const [askBuy, setAskBuy] = useState(null);
   const buy = async () => {
     const valid = [];
     const e = [];
@@ -241,6 +242,10 @@ function LotteryUser() {
     if (e.length) return setErrs(e);
     if (!valid.length) return setErrs(["입력된 게임이 없습니다. 최소 1게임 이상 입력해 주세요."]);
     setErrs([]);
+    setAskBuy(valid);
+  };
+  const doBuy = async (valid) => {
+    setAskBuy(null);
     const r = await api("lottery_buy", { games: valid });
     if (r.ok) {
       app.toast(`복권 ${r.count}게임 구매 완료! 통장에서 금액이 차감되었습니다.`, "✅");
@@ -281,6 +286,15 @@ function LotteryUser() {
           {errs.map((m) => (
             <ErrorBox key={m}>{m}</ErrorBox>
           ))}
+          <ConfirmModal
+            open={!!askBuy}
+            title="🍀 복권 구입"
+            message={askBuy ? `${askBuy.length}게임을 ${askBuy.length * o.ticket_price}드림에 구입할까요?` : ""}
+            onYes={() => doBuy(askBuy)}
+            onNo={() => setAskBuy(null)}
+          >
+            {askBuy ? <div className="caption center">{askBuy.map((g, i) => `${i + 1}게임: ${g.map((n) => pad(n)).join(", ")}`).join("\n")}</div> : null}
+          </ConfirmModal>
         </>
       )}
       <H3>📜 복권 구매 내역</H3>
