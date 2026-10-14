@@ -282,17 +282,16 @@ export function Checkbox({ label, checked, onChange, disabled, help }) {
   );
 }
 
-// 가로 라디오(버튼 모양). 선택 색: 1번째 초록, 2번째 빨강, 3번째 파랑, 나머지 회색
-export function Radio({ label, options, value, onChange, hideLabel, disabled, colorMode = "pos" }) {
+// 가로 라디오(버튼 모양). 선택하면 한 가지 색(--sel)으로 표시
+export function Radio({ label, options, value, onChange, hideLabel, disabled }) {
   return (
     <div className="field">
       <Label label={label} hidden={hideLabel} />
       <div className={`radio ${disabled ? "disabled" : ""}`} role="radiogroup" aria-label={label}>
-        {options.map((o, i) => {
+        {options.map((o) => {
           const on = String(o) === String(value);
-          const c = colorMode === "pos" ? (i < 3 ? `c${i}` : "cx") : "c1";
           return (
-            <div key={o} className={`opt ${on ? `on ${c}` : ""}`} onClick={() => !disabled && onChange && onChange(o)}>
+            <div key={o} className={`opt ${on ? "on" : ""}`} onClick={() => !disabled && onChange && onChange(o)}>
               <span className="dot" />
               {o}
             </div>
@@ -325,6 +324,27 @@ export function Expander({ title, children, defaultOpen = false }) {
           <div className="stack">{children}</div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+// 가운데 확인 팝업(예/아니오)
+export function ConfirmModal({ open, title, message, yesText = "예", noText = "아니오", onYes, onNo }) {
+  if (!open) return null;
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={title || message}>
+      <div className="modal">
+        {title ? <div className="modal-title">{title}</div> : null}
+        <div className="modal-msg">{message}</div>
+        <div className="modal-btns">
+          <button type="button" className="btn primary" onClick={onYes}>
+            {yesText}
+          </button>
+          <button type="button" className="btn" onClick={onNo}>
+            {noText}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

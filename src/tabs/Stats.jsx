@@ -8,8 +8,8 @@ export const VISIBLE_COLS = 7;
 export function OX({ value, onPick, disabled }) {
   return (
     <div className={`ox ${disabled ? "disabled" : ""}`}>
-      {["O", "X", "△"].map((v) => (
-        <span key={v} className={`o ${value === v ? `on v-${v === "△" ? "T" : v}` : ""}`} onClick={() => !disabled && onPick && onPick(v)}>
+      {["O", "X", "△"].map((v, i) => (
+        <span key={v} className={`o v${i} ${value === v ? `on v-${v === "△" ? "T" : v}` : ""}`} onClick={() => !disabled && onPick && onPick(v)}>
           {v}
         </span>
       ))}

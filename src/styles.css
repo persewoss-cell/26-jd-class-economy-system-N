@@ -14,6 +14,8 @@
   --green: #10b981;
   --red: #ef4444;
   --blue: #3b82f6;
+  --sel: #ff4b4b;        /* 선택된 버튼(메뉴·라디오·빠른 금액) 한 가지 색 */
+  --sel-dark: #e63e3e;
 }
 
 * { box-sizing: border-box; }
@@ -102,6 +104,7 @@ h1, h2, h3, h4 { margin: 0; line-height: 1.25; }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .btn.full { width: 100%; }
 .btn.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+.btn.primary:hover:not(:disabled) { color: #fff; filter: brightness(0.95); }
 .btn.dl { min-height: 2.5rem; }
 .btn.busy { opacity: 0.6; pointer-events: none; }
 
@@ -134,33 +137,28 @@ h1, h2, h3, h4 { margin: 0; line-height: 1.25; }
 .check.disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* 라디오(버튼처럼) */
-.radio { display: flex; flex-wrap: wrap; gap: 4px; align-items: flex-start; }
+.radio { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .radio .opt {
-  background: #f3f4f6; border: 1px solid #ddd; border-radius: 4px; padding: 0.15rem 0.55rem; font-size: 0.92rem;
-  min-height: 2rem; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; user-select: none; gap: 0.35rem;
-  touch-action: manipulation;
+  background: #f3f4f6; border: 1px solid #e0e2e7; border-radius: 999px; padding: 0.2rem 0.95rem; font-size: 0.93rem;
+  min-height: 2.2rem; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; user-select: none; gap: 0.4rem;
+  touch-action: manipulation; transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
-.radio .opt .dot { width: 0.85rem; height: 0.85rem; border-radius: 50%; border: 1px solid #9a9ca5; background: #fff; flex: 0 0 auto; }
-.radio .opt.on { color: #fff; }
+.radio .opt .dot { width: 0.85rem; height: 0.85rem; border-radius: 50%; border: 1.5px solid #a3a6af; background: #fff; flex: 0 0 auto; }
+.radio .opt:hover { border-color: var(--sel); }
+.radio .opt.on { background: var(--sel); border-color: var(--sel-dark); color: #fff; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
 .radio .opt.on .dot { display: none; }
-.radio .opt.on.c0 { background: var(--green); border-color: #059669; }
-.radio .opt.on.c1 { background: var(--red); border-color: #dc2626; }
-.radio .opt.on.c2 { background: var(--blue); border-color: #2563eb; }
-.radio .opt.on.cx { background: #6b7280; border-color: #4b5563; }
 .radio.disabled .opt { cursor: default; opacity: 0.85; }
 
 /* 빠른 금액(원형) */
-.round-btns { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.round-btns { display: flex; flex-wrap: wrap; gap: 0.5rem; }
 .round-btns .rb {
-  width: 2.9rem; height: 2.9rem; border-radius: 9999px; border: 1px solid #ddd; background: #f3f4f6;
+  width: 3.1rem; height: 3.1rem; border-radius: 9999px; border: 1px solid #e0e2e7; background: #f3f4f6; font-weight: 600;
   display: inline-flex; align-items: center; justify-content: center; font-size: 0.95rem; cursor: pointer; touch-action: manipulation; user-select: none;
+  transition: background 0.12s, border-color 0.12s, color 0.12s, transform 0.08s;
 }
-.round-btns .rb:active { transform: scale(0.94); }
-.round-btns .rb.on { color: #fff; }
-.round-btns .rb.on.c0 { background: var(--green); border-color: #059669; }
-.round-btns .rb.on.c1 { background: var(--red); border-color: #dc2626; }
-.round-btns .rb.on.c2 { background: var(--blue); border-color: #2563eb; }
-.round-btns .rb.on.cx { background: #6b7280; border-color: #4b5563; }
+.round-btns .rb:hover { border-color: var(--sel); }
+.round-btns .rb:active { transform: scale(0.92); }
+.round-btns .rb.on { background: var(--sel); border-color: var(--sel-dark); color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
 
 /* ---------- 메인 메뉴(가로 스크롤) ---------- */
 .main-menu {
@@ -171,13 +169,13 @@ h1, h2, h3, h4 { margin: 0; line-height: 1.25; }
 .main-menu::-webkit-scrollbar-track { background: #eee; border-radius: 5px; }
 .main-menu::-webkit-scrollbar-thumb { background: #aaa; border-radius: 5px; }
 .main-menu .mm {
-  flex: 0 0 auto; min-height: 2.9rem; white-space: nowrap; padding: 3px 7px; font-size: 0.82rem; letter-spacing: -0.03em;
-  background: #f3f4f6; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 1px; user-select: none; touch-action: manipulation;
+  flex: 0 0 auto; min-height: 2.6rem; white-space: nowrap; padding: 4px 11px; font-size: 0.86rem; letter-spacing: -0.02em;
+  background: #f3f4f6; border: 1px solid #e0e2e7; border-radius: 8px; cursor: pointer; display: flex;
+  align-items: center; justify-content: center; user-select: none; touch-action: manipulation;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
 }
-.main-menu .mm .dot { width: 0.65rem; height: 0.65rem; border-radius: 50%; border: 1px solid #9a9ca5; background: #fff; }
-.main-menu .mm.on { background: var(--primary); border-color: #e03b3b; color: #fff; }
-.main-menu .mm.on .dot { background: #fff; border-color: #fff; box-shadow: inset 0 0 0 3px var(--primary); }
+.main-menu .mm:hover { border-color: var(--sel); }
+.main-menu .mm.on { background: var(--sel); border-color: var(--sel-dark); color: #fff; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
 
 /* ---------- 작은 탭(개인/전체) ---------- */
 .subtabs { display: flex; gap: 1.2rem; border-bottom: 1px solid rgba(49,51,63,0.15); margin-bottom: 0.6rem; }
@@ -228,17 +226,24 @@ table.inv_hist_table th { font-weight: 700; background: rgba(0,0,0,0.03); text-a
 .credit-band th { background: #f3f4f6; }
 
 /* 통계표 O/X/△ 원형 버튼 */
-.ox { display: flex; gap: 4px; align-items: center; justify-content: flex-start; }
+.ox { display: flex; gap: 5px; align-items: center; justify-content: center; }
 .ox .o {
-  width: 1.75rem; height: 1.75rem; border-radius: 999px; border: 1px solid #d1d5db; background: #fff; font-size: 0.8rem;
+  width: 1.95rem; height: 1.95rem; border-radius: 999px; border: 1.5px solid #e2e4e9; background: #fff; font-size: 0.85rem; font-weight: 700; color: #9ca3af;
   display: inline-flex; align-items: center; justify-content: center; cursor: pointer; user-select: none; touch-action: manipulation; line-height: 1;
+  transition: background 0.12s, border-color 0.12s, color 0.12s, transform 0.08s;
 }
-.ox .o.on.v-O { background: var(--green); border-color: #059669; color: #fff; }
-.ox .o.on.v-X { background: var(--red); border-color: #dc2626; color: #fff; }
-.ox .o.on.v-T { background: var(--blue); border-color: #2563eb; color: #fff; }
+.ox:not(.disabled) .o:active { transform: scale(0.9); }
+.ox:not(.disabled) .o.v0:hover { border-color: var(--green); color: var(--green); }
+.ox:not(.disabled) .o.v1:hover { border-color: var(--red); color: var(--red); }
+.ox:not(.disabled) .o.v2:hover { border-color: var(--blue); color: var(--blue); }
+.ox .o.on { color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.18); }
+.ox .o.on.v-O { background: var(--green); border-color: #059669; }
+.ox .o.on.v-X { background: var(--red); border-color: #dc2626; }
+.ox .o.on.v-T { background: var(--blue); border-color: #2563eb; }
 .ox.disabled .o { cursor: default; }
+.ox.disabled .o:not(.on) { opacity: 0.55; }
 .grid-sep { border-bottom: 1px solid #e5e7eb; }
-.stat-hdr { font-weight: 700; line-height: 1.1; font-size: 0.9rem; }
+.stat-hdr { font-weight: 700; line-height: 1.2; font-size: 0.88rem; text-align: center; word-break: keep-all; }
 .credit-ledger-score { text-align: center; font-weight: 900; line-height: 1.1; }
 .credit-ledger-divider { height: 1px; background: #d8d8d8; margin: 1px 0; }
 
@@ -284,3 +289,12 @@ table.inv_hist_table th { font-weight: 700; background: rgba(0,0,0,0.03); text-a
 
 /* 차트 */
 .chart svg { width: 100%; height: 260px; display: block; }
+
+/* ---------- 확인 팝업 ---------- */
+.modal-backdrop { position: fixed; inset: 0; z-index: 250; background: rgba(17, 24, 39, 0.38); display: flex; align-items: center; justify-content: center; padding: 16px; animation: mfade 0.12s ease-out; }
+.modal { background: #fff; border-radius: 16px; width: min(380px, 100%); padding: 1.5rem 1.4rem 1.2rem; box-shadow: 0 18px 50px rgba(0,0,0,0.22); text-align: center; }
+.modal-title { font-size: 0.95rem; color: var(--muted); font-weight: 600; margin-bottom: 0.35rem; }
+.modal-msg { font-size: 1.25rem; font-weight: 700; margin-bottom: 1.2rem; word-break: keep-all; }
+.modal-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+.modal-btns .btn { min-height: 2.8rem; font-size: 1.05rem; font-weight: 600; }
+@keyframes mfade { from { opacity: 0; } to { opacity: 1; } }

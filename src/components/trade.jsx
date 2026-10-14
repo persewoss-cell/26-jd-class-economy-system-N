@@ -7,8 +7,9 @@ const QUICK = [0, 10, 20, 50, 100, 200, 500, 1000];
 export const templateDisplay = (t) => `${t.label}[${t.kind === "deposit" ? "입금" : "출금"} ${parseInt(t.amount, 10) || 0}]`;
 export const treasuryTemplateDisplay = (t) => `${t.label}[${t.kind === "income" ? "세입" : "세출"} ${parseInt(t.amount, 10) || 0}]`;
 
-export function useTradeForm() {
-  const init = () => ({ tpl: "(직접 입력)", memo: "", treasury: true, mode: "금액(+)", pick: "0", dep: 0, wd: 0 });
+// treasuryRef: 관리자 화면에서 팝업으로 고른 "국고 반영" 기본값(저장 후 초기화해도 유지)
+export function useTradeForm(treasuryRef) {
+  const init = () => ({ tpl: "(직접 입력)", memo: "", treasury: treasuryRef ? treasuryRef.current : true, mode: "금액(+)", pick: "0", dep: 0, wd: 0 });
   const [f, setF] = useState(init);
   return [f, setF, () => setF(init())];
 }
@@ -21,10 +22,10 @@ function setByNet(net) {
 function RoundButtons({ value, onPick }) {
   return (
     <div className="round-btns" role="radiogroup" aria-label="빠른금액">
-      {QUICK.map((a, i) => {
+      {QUICK.map((a) => {
         const on = String(a) === String(value);
         return (
-          <div key={a} className={`rb ${on ? `on ${i < 3 ? `c${i}` : "cx"}` : ""}`} onClick={() => onPick(String(a))}>
+          <div key={a} className={`rb ${on ? "on" : ""}`} onClick={() => onPick(String(a))}>
             {a}
           </div>
         );

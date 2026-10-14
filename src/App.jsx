@@ -267,7 +267,6 @@ export default function App() {
                             }
                           }}
                         >
-                          <span className="dot" />
                           <span>{tabs.labels[k] || k}</span>
                         </div>
                       ))}

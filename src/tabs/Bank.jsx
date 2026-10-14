@@ -1,9 +1,9 @@
 // 🏦 내 통장 (관리자: 💰입금/출금 / 학생: 📝 통장/거래 / 권한학생: ⍟💰입금/출금(관리자))
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { api } from "../lib/api.js";
 import { readExcel, downloadExcel } from "../lib/excel.js";
 import {
-  useApp, useLoad, Cols, H3, Subheader, Caption, Btn, TextInput, Select, NumberInput, Checkbox, Radio, SubTabs,
+  useApp, useLoad, Cols, H3, Subheader, Caption, Btn, TextInput, Select, NumberInput, Checkbox, Radio, SubTabs, ConfirmModal,
   Info, Warning, ErrorBox, Success, DataTable, FileUpload, SectionDivider, Loading,
 } from "../components/ui.jsx";
 import { TradeForm, useTradeForm, templateDisplay, TX_COLUMNS, txRowsView } from "../components/trade.jsx";
@@ -293,8 +293,18 @@ export function BankAdmin({ variant }) {
   const templates = (tpls.data && tpls.data.templates) || [];
   const accounts = useLoad("accounts_list", {}, [app.ver]);
 
+  // 국고 반영: 탭을 열 때 팝업으로 한 번 물어보고, 고른 값이 저장 후에도 기본값으로 유지됨
+  const treasuryRef = useRef(false);
+  const [askTreasury, setAskTreasury] = useState(true);
+  const answerTreasury = (yes) => {
+    treasuryRef.current = yes;
+    setBForm((f) => ({ ...f, treasury: yes }));
+    setPForm((f) => ({ ...f, treasury: yes }));
+    setAskTreasury(false);
+  };
+
   // 전체
-  const [bForm, setBForm, bReset] = useTradeForm();
+  const [bForm, setBForm, bReset] = useTradeForm(treasuryRef);
   const [bErr, setBErr] = useState("");
   const [undo, setUndo] = useState(false);
   const saveBulk = async () => {
@@ -313,7 +323,7 @@ export function BankAdmin({ variant }) {
 
   // 개인
   const [picks, setPicks] = useState({});
-  const [pForm, setPForm, pReset] = useTradeForm();
+  const [pForm, setPForm, pReset] = useTradeForm(treasuryRef);
   const [pErr, setPErr] = useState("");
   const accs = useMemo(() => {
     const list = [...((accounts.data && accounts.data.accounts) || [])];
@@ -351,6 +361,7 @@ export function BankAdmin({ variant }) {
 
   return (
     <>
+      <ConfirmModal open={askTreasury} title="🏛️ 국고 반영" message="국고에 반영할까요?" onYes={() => answerTreasury(true)} onNo={() => answerTreasury(false)} />
       {variant === "student" ? <Subheader>💰입금/출금 적용</Subheader> : null}
       <SubTabs tabs={["개인", "전체"]} active={sub} onChange={setSub} />
       {sub === "전체" ? (
