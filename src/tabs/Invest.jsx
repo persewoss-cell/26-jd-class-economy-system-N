@@ -62,18 +62,120 @@ function wrapLabel(text, perLine) {
   return out.length ? out : ["-"];
 }
 
+// ---------- 그래프 저장(PNG) / 인쇄(A4 가로) ----------
+// 제목은 "주아" 글씨체로 크게. 글씨체를 못 받아오면(학교망 차단 등) 기본 굵은 글씨로
+let juaReady = null;
+function loadJua() {
+  if (juaReady) return juaReady;
+  juaReady = (async () => {
+    try {
+      if (!document.getElementById("font-jua")) {
+        const l = document.createElement("link");
+        l.id = "font-jua";
+        l.rel = "stylesheet";
+        l.href = "https://fonts.googleapis.com/css2?family=Jua&display=swap";
+        document.head.appendChild(l);
+        await new Promise((res) => {
+          l.onload = res;
+          l.onerror = res;
+          setTimeout(res, 1500);
+        });
+      }
+      await Promise.race([document.fonts.load('80px "Jua"', "주가 그래프"), new Promise((res) => setTimeout(res, 1500))]);
+    } catch {
+      /* 기본 글씨로 */
+    }
+  })();
+  return juaReady;
+}
+
+// A4 가로 비율(297:210) 그림 한 장: 위쪽 제목 + 아래 큰 그래프
+async function chartImage(points, title) {
+  const [{ renderToStaticMarkup }] = await Promise.all([import("react-dom/server"), loadJua()]);
+  const svg = renderToStaticMarkup(<PriceChart points={points} W={1240} plotH={520} fs={1.9} bare />);
+  const CW = 2400;
+  const CH = Math.round((CW * 210) / 297);
+  const cv = document.createElement("canvas");
+  cv.width = CW;
+  cv.height = CH;
+  const g = cv.getContext("2d");
+  g.fillStyle = "#ffffff";
+  g.fillRect(0, 0, CW, CH);
+  const hasJua = document.fonts && document.fonts.check('80px "Jua"', "주가");
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.fillStyle = "#2d3748";
+  g.font = hasJua ? '150px "Jua"' : 'bold 130px "Pretendard Variable", "Malgun Gothic", sans-serif';
+  g.fillText(title, CW / 2, 150);
+  g.fillStyle = "#8a94a6";
+  g.font = '44px "Pretendard Variable", "Malgun Gothic", sans-serif';
+  const d = new Date();
+  g.fillText(`${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 기준`, CW / 2, 262);
+  const img = new Image();
+  const src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg.replace("<svg ", '<svg xmlns="http://www.w3.org/2000/svg" '))}`;
+  await new Promise((res, rej) => {
+    img.onload = res;
+    img.onerror = rej;
+    img.src = src;
+  });
+  const top = 320;
+  const boxW = CW - 160;
+  const boxH = CH - top - 70;
+  const sc = Math.min(boxW / img.width, boxH / img.height);
+  const w = img.width * sc;
+  const h = img.height * sc;
+  g.drawImage(img, (CW - w) / 2, top + (boxH - h) / 2, w, h);
+  return cv;
+}
+
+async function saveChart(points, title) {
+  const cv = await chartImage(points, title);
+  const blob = await new Promise((res) => cv.toBlob(res, "image/png"));
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${title}.png`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+async function printChart(points, title) {
+  const url = (await chartImage(points, title)).toDataURL("image/png");
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title><style>@page{size:A4 landscape;margin:8mm}html,body{margin:0;height:100%}body{display:flex;align-items:center;justify-content:center}img{max-width:100%;max-height:100%}</style></head><body><img src="${url}" onload="setTimeout(function(){window.focus();window.print();},150)"></body></html>`;
+  const w = window.open("", "_blank");
+  if (w) {
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+    return;
+  }
+  // 새 창이 막히면 숨은 칸에서 인쇄
+  const f = document.createElement("iframe");
+  f.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0";
+  document.body.appendChild(f);
+  f.contentDocument.open();
+  f.contentDocument.write(html.replace(' onload="setTimeout(function(){window.focus();window.print();},150)"', ""));
+  f.contentDocument.close();
+  setTimeout(() => {
+    f.contentWindow.focus();
+    f.contentWindow.print();
+    setTimeout(() => f.remove(), 60000);
+  }, 400);
+}
+
 // 꺾은선 그래프: 굵고 부드러운 선 + 점마다 값 표시. 상승 빨강 / 하락 파랑 / 보합 검정
-function PriceChart({ points }) {
-  const W = 620;
+// title 을 주면 오른쪽 위에 💾 저장 / 🖨️ 인쇄 버튼 (bare: 저장용 그림만)
+function PriceChart({ points, title, W = 620, plotH = 230, bare = false, fs = 1 }) {
   const padX = 24;
   const padT = 32;
-  const plotH = 230;
   const n = points.length;
   const band = (W - padX * 2) / Math.max(n, 1);
-  const perLine = Math.max(3, Math.floor(band / 16));
+  const perLine = Math.max(3, Math.floor(band / (16 * fs)));
   const labels = points.map((p) => wrapLabel(p.label, perLine));
   const maxLines = Math.max(1, ...labels.map((l) => l.length));
-  const H = padT + plotH + 18 + maxLines * 19;
+  const H = padT * fs + plotH + 18 * fs + maxLines * 19 * fs;
   const [, , ticks] = niceAxis(points.map((p) => p.y));
   const x = (i) => padX + band * (i + 0.5);
   // 가장 높은/낮은 점이 테두리에 붙지 않게 위아래 여유
@@ -82,14 +184,13 @@ function PriceChart({ points }) {
   const span = vmax - vmin || Math.abs(vmax) || 1;
   const ylo = vmin - span * 0.18;
   const yhi = vmax + span * 0.18;
-  const y = (v) => padT + plotH * (1 - (v - ylo) / (yhi - ylo || 1));
+  const y = (v) => padT * fs + plotH * (1 - (v - ylo) / (yhi - ylo || 1));
   const minor = [];
   for (let k = 0; k < ticks.length - 1; k++) for (let m = 1; m < 4; m++) minor.push(ticks[k] + ((ticks[k + 1] - ticks[k]) * m) / 4);
-  const inPlot = (t) => y(t) >= padT - 6 && y(t) <= padT + plotH + 6;
+  const inPlot = (t) => y(t) >= padT * fs - 6 && y(t) <= padT * fs + plotH + 6;
   const colorOf = (a, b) => (b > a ? "#ef4444" : b < a ? "#3b82f6" : "#111827");
-  return (
-    <div className="chart">
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label="주가 변동 그래프">
+  const svgEl = (
+      <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} preserveAspectRatio="xMidYMid meet" role="img" aria-label="주가 변동 그래프" fontFamily="Pretendard Variable, Malgun Gothic, Apple SD Gothic Neo, sans-serif">
         {minor.filter(inPlot).map((t, k) => (
           <line key={`m${k}`} x1={padX / 2} x2={W - padX / 2} y1={y(t)} y2={y(t)} stroke="#f1f3f6" strokeWidth="1" />
         ))}
@@ -98,7 +199,7 @@ function PriceChart({ points }) {
         ))}
         {points.slice(0, -1).map((p, i) => {
           const q = points[i + 1];
-          return <line key={i} x1={x(i)} y1={y(p.y)} x2={x(i + 1)} y2={y(q.y)} stroke={colorOf(p.y, q.y)} strokeOpacity="0.35" strokeWidth="9" strokeLinecap="round" />;
+          return <line key={i} x1={x(i)} y1={y(p.y)} x2={x(i + 1)} y2={y(q.y)} stroke={colorOf(p.y, q.y)} strokeOpacity="0.35" strokeWidth={9 * fs} strokeLinecap="round" />;
         })}
         {points.map((p, i) => {
           const prev = i > 0 ? points[i - 1].y : p.y;
@@ -106,14 +207,14 @@ function PriceChart({ points }) {
           const below = p.y < prev && p.y <= next && i > 0; // 골짜기 점은 값 글자를 아래에
           return (
             <g key={i}>
-              <circle cx={x(i)} cy={y(p.y)} r="4.5" fill="#fff" stroke={i > 0 ? colorOf(prev, p.y) : "#9ca3af"} strokeWidth="2">
+              <circle cx={x(i)} cy={y(p.y)} r={4.5 * fs} fill="#fff" stroke={i > 0 ? colorOf(prev, p.y) : "#9ca3af"} strokeWidth={2 * fs}>
                 <title>{`${p.label}: ${p.y}`}</title>
               </circle>
-              <text x={x(i)} y={below ? y(p.y) + 25 : y(p.y) - 13} fontSize="18" fontWeight="800" textAnchor="middle" fill="#374151">
+              <text x={x(i)} y={below ? y(p.y) + 25 * fs : y(p.y) - 13 * fs} fontSize={18 * fs} fontWeight="800" textAnchor="middle" fill="#374151">
                 {p.y}
               </text>
               {labels[i].map((line, k) => (
-                <text key={k} x={x(i)} y={padT + plotH + 24 + k * 19} fontSize="15.5" textAnchor="middle" fill="#4b5563">
+                <text key={k} x={x(i)} y={padT * fs + plotH + 24 * fs + k * 19 * fs} fontSize={15.5 * fs} textAnchor="middle" fill="#4b5563">
                   {line}
                 </text>
               ))}
@@ -121,6 +222,39 @@ function PriceChart({ points }) {
           );
         })}
       </svg>
+  );
+  if (bare) return svgEl;
+  return (
+    <div className="chart">
+      {title ? <ChartTools points={points} title={title} /> : null}
+      {svgEl}
+    </div>
+  );
+}
+
+function ChartTools({ points, title }) {
+  const app = useApp();
+  const [busy, setBusy] = useState("");
+  const run = async (kind) => {
+    if (busy) return;
+    setBusy(kind);
+    try {
+      if (kind === "save") await saveChart(points, title);
+      else await printChart(points, title);
+    } catch (e) {
+      app.toast(`그래프 ${kind === "save" ? "저장" : "인쇄"} 실패: ${e.message || e}`, "⚠️");
+    } finally {
+      setBusy("");
+    }
+  };
+  return (
+    <div className="chart-tools">
+      <button type="button" className="icon-btn" title="그래프 그림으로 저장" aria-label="그래프 저장" disabled={!!busy} onClick={() => run("save")}>
+        {busy === "save" ? "…" : "💾"}
+      </button>
+      <button type="button" className="icon-btn" title="A4 가로로 인쇄" aria-label="그래프 인쇄" disabled={!!busy} onClick={() => run("print")}>
+        {busy === "print" ? "…" : "🖨️"}
+      </button>
     </div>
   );
 }
@@ -211,7 +345,7 @@ function HistoryBlock({ hist, product, editable, onChanged }) {
         </table>
       </div>
       </div>
-      <PriceChart points={points} />
+      <PriceChart points={points} title={`${product.name} 주가 그래프`} />
       {editing ? (
         <HistEditPopup
           h={editing}

@@ -1,6 +1,7 @@
 // 핵심 비즈니스 로직 (app.py의 api_* / helper 함수들을 그대로 옮김)
 // 잔액 변경은 MongoDB 원자 연산($inc)으로 처리해서 동시에 눌러도 금액이 어긋나지 않게 함
 import { col, newId, decKey, encKey } from "./db.js";
+import { curGroup, runInGroup } from "./group.js";
 import { fail, DEFAULT_CREDIT_GRADE, DEFAULT_CREDIT_SCORE, ADMIN_NAME } from "./auth.js";
 import {
   toInt, ior, toFloat, forr, str, as2, toDate, pyRound, scoreToGrade, normStatus,
@@ -377,7 +378,7 @@ export async function alreadyPaidThisMonth(db, mkey, sid, jobId = "", jobName = 
 
 export async function writePaylog(db, mkey, sid, amount, jobName, method, jobId = "") {
   await col(db, "payroll_log").set(paylogId(mkey, sid, jobId), {
-    month: mkey, student_id: sid, amount: toInt(amount), job: str(jobName), job_id: str(jobId), method: str(method), paid_at: new Date(),
+    month: mkey, student_id: sid, amount: toInt(amount), job: str(jobName), job_id: str(jobId), method: str(method), paid_at: new Date(), grp: curGroup(),
   }, true);
 }
 
@@ -498,21 +499,24 @@ export async function runAutoPayouts(db, { force = false } = {}) {
     for (const x of due) {
       const m = toDate(x.maturity_utc || x.maturity_date);
       if (!m || m > nowD) continue;
+      await runInGroup(() => matureOne(db, x));
+    }
+    async function matureOne(db, x) {
       const sid = str(x.student_id).trim();
       const principal = toInt(x.principal);
       const interest = toInt(x.interest);
       const payout = toInt(x.maturity_amount) || principal + interest;
       const weeks = toInt(x.weeks);
-      if (!sid || payout <= 0) continue;
+      if (!sid || payout <= 0) return;
       const claimed = await col(db, "savings").updateIf(String(x._id), { status: { $in: ["running", "active"] } }, {
         status: "matured", result: "matured", processed_at: new Date(), payout_amount: payout,
       });
-      if (!claimed) continue;
+      if (!claimed) return;
       const doc = await applyBalance(db, sid, payout);
       // 학생 계정을 못 찾아 입금이 안 됐으면 만기 처리도 되돌려 다음에 다시 시도
       if (!doc) {
         await col(db, "savings").update(String(x._id), { status: str(x.status), result: x.result ?? null, processed_at: null, payout_amount: null });
-        continue;
+        return;
       }
       await insertTx(db, { sid, type: "maturity", amount: payout, balanceAfter: toInt(doc && doc.balance), memo: `적금 만기 지급 (${weeks}주)`, recorder: "시스템(적금)" });
     }
@@ -546,18 +550,21 @@ export async function runAutoPayouts(db, { force = false } = {}) {
         sid = str(sid).trim();
         if (!sid || !(sid in idToName)) continue; // 삭제된 학생은 지급 안 함
         if (await alreadyPaidThisMonth(db, mkey, sid, jobId, jobName)) continue;
-        let paid;
-        try {
-          paid = await adminTx(db, { sid, memo: `월급 ${jobName}`, deposit: net, actor: "system_salary", recorder: "관리자" });
-        } catch {
-          continue;
-        }
-        const ded = Math.max(0, gross - net);
-        if (ded > 0) {
-          const nm = idToName[sid] || "";
-          await treasuryApply(db, { memo: `월급 공제 세입(${mkey}) ${jobName}` + (nm ? ` - ${nm}` : ""), signed: ded, actor: "system_salary", recorder: "관리자", extra: { salary_tx_id: String(paid.tx_id) } });
-        }
-        await writePaylog(db, mkey, sid, net, jobName, "auto", jobId);
+        // 학생 한 명의 월급(통장 입금 + 국고 공제 세입 + 지급 기록)을 한 묶음으로
+        await runInGroup(async () => {
+          let paid;
+          try {
+            paid = await adminTx(db, { sid, memo: `월급 ${jobName}`, deposit: net, actor: "system_salary", recorder: "관리자" });
+          } catch {
+            return;
+          }
+          const ded = Math.max(0, gross - net);
+          if (ded > 0) {
+            const nm = idToName[sid] || "";
+            await treasuryApply(db, { memo: `월급 공제 세입(${mkey}) ${jobName}` + (nm ? ` - ${nm}` : ""), signed: ded, actor: "system_salary", recorder: "관리자", extra: { salary_tx_id: String(paid.tx_id) } });
+          }
+          await writePaylog(db, mkey, sid, net, jobName, "auto", jobId);
+        });
       }
     }
   } catch (e) {

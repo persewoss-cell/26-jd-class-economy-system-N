@@ -4,6 +4,8 @@ import { getDb } from "../server/db.js";
 import { buildCtx, ApiError } from "../server/auth.js";
 import { runAutoPayouts } from "../server/core.js";
 import { ACTIONS } from "../server/actions/index.js";
+import { runInGroup } from "../server/group.js";
+import { auditPre, auditWrite } from "../server/audit.js";
 
 async function readBody(req) {
   if (req.body && typeof req.body === "object") return req.body;
@@ -54,7 +56,13 @@ export default async function handler(req, res) {
     // 자동 적금 만기/월급 지급: 로그인·새로고침(세션 확인) 때만 시도 (탭을 누를 때마다 하지 않아 빠름)
     if (action === "session" || action === "login") await runAutoPayouts(db);
 
-    const data = await fn(ctx, args);
+    // 버튼 한 번에 생긴 기록은 같은 묶음 번호로 (로그기록 묶음·되돌리기용) + 관리 작업은 변경 기록 남김
+    const data = await runInGroup(async () => {
+      const pre = await auditPre(ctx, action, args);
+      const out = await fn(ctx, args);
+      await auditWrite(ctx, action, args, out, pre);
+      return out;
+    });
     return res.status(200).json({ ok: true, ...(data || {}) });
   } catch (e) {
     if (e instanceof ApiError) return res.status(200).json({ ok: false, error: e.userMessage });

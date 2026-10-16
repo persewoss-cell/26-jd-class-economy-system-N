@@ -535,12 +535,12 @@ export function Progress({ ratio }) {
 }
 
 // ---------------- 표 (st.dataframe) ----------------
-function cellText(v) {
+export function cellText(v) {
   if (v === null || v === undefined) return "";
   return String(v);
 }
 
-function toCsv(columns, rows) {
+export function toCsv(columns, rows) {
   const esc = (s) => {
     const t = cellText(s);
     return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;

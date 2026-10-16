@@ -1,5 +1,6 @@
 // 🍀 복권
 import { col, newId } from "../db.js";
+import { curGroup } from "../group.js";
 import { fail, requireAdmin, requireStudent, ADMIN_NAME } from "../auth.js";
 import { adminTx, applyBalance, insertTx, treasuryApply } from "../core.js";
 import { str, toInt, ior, toDate, fmtLotteryDt, fmtMd, pyRound, pad2 } from "../../shared/format.js";
@@ -404,7 +405,7 @@ export default {
     const no = toInt(open.round_no);
     await insertTx(db, { sid: ctx.sid, type: "withdraw", amount: -total, balanceAfter: toInt(doc.balance), memo: `복권 ${no}회 ${norm.length}게임 구매`, recorder: str(s.name) });
     await db.collection("lottery_entries").insertMany(norm.map((n) => ({
-      _id: newId(), round_id: open.round_id, round_no: no, student_id: ctx.sid, student_no: toInt(s.no), student_name: str(s.name), numbers: n, submitted_at: new Date(), ticket_price: price,
+      _id: newId(), round_id: open.round_id, round_no: no, student_id: ctx.sid, student_no: toInt(s.no), student_name: str(s.name), numbers: n, submitted_at: new Date(), ticket_price: price, grp: curGroup(),
     })));
     return { count: norm.length };
   },

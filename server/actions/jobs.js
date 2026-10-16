@@ -1,6 +1,7 @@
 // 💼 직업/월급 : 공제 설정, 지급 설정, 수동지급, 중복 회수, 직업 지정/해제, 직업 추가/수정/삭제, 엑셀
 import { col } from "../db.js";
 import { fail, requireAny, isAdminPin, adminRecorder } from "../auth.js";
+import { runInGroup } from "../group.js";
 import {
   getSalaryCfg, calcNet, alreadyPaidThisMonth, writePaylog, adminTx, treasuryApply, listAccounts, activeStudents, removeSalaryPayment, runAutoPayouts, effectivePayDay,
 } from "../core.js";
@@ -225,19 +226,23 @@ export default {
         continue;
       }
       const nm = idToName[t.sid] || "";
-      let paidTx;
-      try {
-        paidTx = await adminTx(db, { sid: t.sid, memo: `월급 ${t.job}`, deposit: t.amt, recorder });
-      } catch {
-        err += 1;
-        continue;
-      }
-      const ded = Math.max(0, t.gross - t.amt);
-      if (ded > 0) {
-        await treasuryApply(db, { memo: `월급 공제 세입(${mkey}) ${t.job}` + (nm ? ` - ${nm}` : ""), signed: ded, actor: "system_salary", recorder, extra: { salary_tx_id: String(paidTx.tx_id) } });
-      }
-      await writePaylog(db, mkey, t.sid, t.amt, t.job, "manual", t.job_id);
-      paid += 1;
+      // 학생 한 명의 월급을 한 묶음으로 (로그기록에서 한 명씩 되돌리기 가능)
+      const okPaid = await runInGroup(async () => {
+        let paidTx;
+        try {
+          paidTx = await adminTx(db, { sid: t.sid, memo: `월급 ${t.job}`, deposit: t.amt, recorder });
+        } catch {
+          return false;
+        }
+        const ded = Math.max(0, t.gross - t.amt);
+        if (ded > 0) {
+          await treasuryApply(db, { memo: `월급 공제 세입(${mkey}) ${t.job}` + (nm ? ` - ${nm}` : ""), signed: ded, actor: "system_salary", recorder, extra: { salary_tx_id: String(paidTx.tx_id) } });
+        }
+        await writePaylog(db, mkey, t.sid, t.amt, t.job, "manual", t.job_id);
+        return true;
+      });
+      if (okPaid) paid += 1;
+      else err += 1;
     }
     return { paid, err, skipped };
   },

@@ -2,6 +2,7 @@
 // - 문서 _id는 ObjectId가 아니라 "문자열"로 저장 (기존 데이터와 동일)
 // - 중첩 dict 키의 '.', '$'는 전각 문자로 치환 (기존 _normalize_dict_key와 동일)
 import { MongoClient, ObjectId } from "mongodb";
+import { curGroup } from "./group.js";
 
 let _clientPromise = null;
 let _db = null;
@@ -72,6 +73,13 @@ export function normalizePayload(data) {
   return out;
 }
 
+// 새로 만드는 기록에 묶음 번호(grp)를 붙일 컬렉션 (로그기록 묶음·되돌리기용)
+const GROUPED = new Set(["transactions", "treasury_ledger", "savings", "mart_ledger", "invest_ledger", "payroll_log", "auction_bids", "credit_adjustments", "audit_log", "invest_price_history", "mart_requests", "deposit_requests"]);
+function withGroup(name, doc) {
+  const g = GROUPED.has(name) ? curGroup() : null;
+  return g && !doc.grp ? { ...doc, grp: g } : doc;
+}
+
 // Firestore 스타일 래퍼(기존 코드 흐름을 그대로 옮기기 쉽게)
 export function col(db, name) {
   const c = db.collection(name);
@@ -90,13 +98,13 @@ export function col(db, name) {
     },
     async add(data) {
       const id = newId();
-      await c.insertOne({ ...normalizePayload(data), _id: id });
+      await c.insertOne(withGroup(name, { ...normalizePayload(data), _id: id }));
       return id;
     },
     async create(id, data) {
       // 이미 있으면 false (AlreadyExists)
       try {
-        await c.insertOne({ ...normalizePayload(data), _id: String(id) });
+        await c.insertOne(withGroup(name, { ...normalizePayload(data), _id: String(id) }));
         return true;
       } catch (e) {
         if (e && e.code === 11000) return false;

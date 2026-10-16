@@ -388,7 +388,7 @@ table.ledger { border-collapse: separate; border-spacing: 0; font-size: 0.92rem;
 @keyframes tl { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
 
 /* 차트 */
-.chart { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 0.4rem 0.6rem; }
+.chart { position: relative; background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 0.4rem 0.6rem; }
 .chart svg { width: 100%; height: auto; display: block; }
 
 /* ---------- 확인 팝업 ---------- */
@@ -516,3 +516,23 @@ table.ledger { border-collapse: separate; border-spacing: 0; font-size: 0.92rem;
 .icon-btn { width: 1.95rem; height: 1.95rem; border: 1px solid var(--line); background: #fff; border-radius: 8px; cursor: pointer; font-size: 0.85rem; line-height: 1; margin: 0 1px; }
 .icon-btn:hover { border-color: var(--mint); background: var(--mint-l); }
 .icon-btn.del:hover { border-color: var(--out); background: var(--out-l); }
+
+/* 로그기록: 묶음 색 구분 + 되돌리기 */
+.log-tbl tr.grp-shade td { background: #f3f5f8; }
+.log-tbl tbody tr:hover td { background: var(--mint-l); }
+.log-tbl .undo-h { width: 5.2rem; }
+.log-tbl td.undo-cell { text-align: center; vertical-align: middle; border-left: 1px solid #eef1f5; }
+.undo-btn { font-size: 0.9rem; }
+.undo-no { color: #c3c9d2; }
+.tbl-tools .tool-note { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; color: var(--muted); margin-right: 0.3rem; }
+.tbl-tools .icon-btn.sample { width: 1.5rem; height: 1.5rem; display: inline-flex; align-items: center; justify-content: center; font-size: 0.72rem; cursor: default; }
+.undo-list { max-height: 220px; overflow: auto; text-align: left; font-size: 0.85rem; background: var(--field); border-radius: 10px; padding: 0.5rem 0.7rem; line-height: 1.6; }
+
+.chart-tools { position: absolute; top: 0.4rem; right: 0.45rem; display: flex; gap: 0.25rem; z-index: 2; }
+.chart-tools .icon-btn { width: 1.85rem; height: 1.85rem; font-size: 0.82rem; }
+/* 로그 표가 화면 안에 들어오도록: 내역·대상은 줄바꿈, 시간은 좁게 */
+.log-tbl th, .log-tbl td { padding: 0.45rem 0.5rem; font-size: 0.82rem; }
+.log-tbl td:nth-child(2) { white-space: normal; min-width: 6.5rem; }
+.log-tbl td:nth-child(3) { white-space: normal; min-width: 5.8rem; max-width: 9rem; word-break: keep-all; }
+.log-tbl td:nth-child(5) { white-space: normal; min-width: 11rem; max-width: 22rem; text-align: left; word-break: keep-all; }
+.log-tbl td:nth-child(4) { white-space: nowrap; }
