@@ -509,3 +509,10 @@ table.ledger { border-collapse: separate; border-spacing: 0; font-size: 0.92rem;
 .dep-grid .dep-num { font-weight: 700; }
 .dep-grid .dep-act { display: flex; gap: 0.35rem; justify-content: center; }
 .dep-grid .dep-act .btn.sm { padding: 0.2rem 0.85rem; min-height: 2.05rem; }
+
+/* 투자 주가 변동 기록: 수정/삭제 버튼 */
+.inv_hist_table .hist-act-h { width: 4.6rem; }
+.inv_hist_table td.hist-act { white-space: nowrap; text-align: center; padding: 3px 6px; }
+.icon-btn { width: 1.95rem; height: 1.95rem; border: 1px solid var(--line); background: #fff; border-radius: 8px; cursor: pointer; font-size: 0.85rem; line-height: 1; margin: 0 1px; }
+.icon-btn:hover { border-color: var(--mint); background: var(--mint-l); }
+.icon-btn.del:hover { border-color: var(--out); background: var(--out-l); }

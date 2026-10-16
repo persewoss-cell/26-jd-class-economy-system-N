@@ -1,7 +1,7 @@
 // 📈 투자 (관리자 / 학생 / 권한학생 ⍟📈 투자(관리자))
 import React, { useEffect, useState } from "react";
 import { api } from "../lib/api.js";
-import { useApp, useLoad, Cols, H3, H4, Caption, Btn, TextInput, Select, NumberInput, Info, Warning, ErrorBox, Expander, DataTable, Loading, ConfirmModal, useSort, SortTh } from "../components/ui.jsx";
+import { useApp, useLoad, Cols, H3, H4, Caption, Btn, TextInput, Select, NumberInput, Info, Warning, ErrorBox, Expander, DataTable, Loading, ConfirmModal, useSort, SortTh, Popup } from "../components/ui.jsx";
 
 const f2 = (v) => (Number(v) || 0).toFixed(2);
 
@@ -126,7 +126,44 @@ function PriceChart({ points }) {
 }
 
 const HIST_VAL = { 변동일시: (h) => -h._i, 변동사유: (h) => h.reason, 실제주가: (h) => h.real_price_after, 환산주가: (h) => h.price_after, "주가 등락": (h) => h.price_after - h.price_before };
-function HistoryBlock({ hist, product }) {
+// 실제주가 → 환산주가(0~100) : 서버와 같은 계산 (미리보기용)
+const toNorm = (real, mn, mx) => (mx <= mn ? 0 : Math.max(0, Math.min(100, ((real - mn) / (mx - mn)) * 100)));
+
+// ✏️ 주가 변동 기록 수정 팝업
+function HistEditPopup({ h, product, onClose, onSaved }) {
+  const app = useApp();
+  const [reason, setReason] = useState(h.reason);
+  const [real, setReal] = useState(h.real_price_after);
+  const [err, setErr] = useState("");
+  const save = async () => {
+    setErr("");
+    if (!String(reason).trim()) return setErr("변동 사유를 입력해 주세요.");
+    const r = await api("invest_hist_update", { id: h.id, reason: String(reason).trim(), real_price: real });
+    if (!r.ok) return setErr(r.error || "수정 실패");
+    app.toast(`주가 기록 수정 완료${r.repriced ? ` (진행 중 투자 ${r.repriced}건 매입주가 정정)` : ""}`, "✏️");
+    onSaved();
+  };
+  return (
+    <Popup open title={`✏️ 주가 변동 기록 수정 · ${h.dt_text}`} onClose={onClose}>
+      <Cols w={[3, 2]} va="bottom">
+        <TextInput label="변동 사유" value={reason} onChange={setReason} />
+        <NumberInput label="실제주가" value={real} onChange={setReal} min={-9999999.99} max={9999999.99} step={0.01} decimals={2} />
+      </Cols>
+      <Caption>{`환산주가: ${f2(h.price_after)} → ${f2(toNorm(Number(real) || 0, product.min_price, product.max_price))} (범위 ${f2(product.min_price)}~${f2(product.max_price)})`}</Caption>
+      <Caption>그래프와 다음 기록의 등락이 함께 바뀌고, 마지막 기록이면 현재 주가와 진행 중인 투자 평가에도 반영돼요.</Caption>
+      <Btn className="primary" onClick={save}>
+        ✅ 저장
+      </Btn>
+      <ErrorBox>{err}</ErrorBox>
+    </Popup>
+  );
+}
+
+function HistoryBlock({ hist, product, editable, onChanged }) {
+  const app = useApp();
+  const [editing, setEditing] = useState(null);
+  const [delAsk, setDelAsk] = useState(null);
+  const [delErr, setDelErr] = useState("");
   const srt = useSort(
     (hist || []).map((h, i) => ({ ...h, _i: i })),
     (h, c) => HIST_VAL[c](h)
@@ -144,18 +181,29 @@ function HistoryBlock({ hist, product }) {
               {Object.keys(HIST_VAL).map((c) => (
                 <SortTh key={c} label={c} s={srt} />
               ))}
+              {editable ? <th className="hist-act-h">관리</th> : null}
             </tr>
           </thead>
           <tbody>
             {srt.sorted.map((h, i) => {
               const diff = +(h.price_after - h.price_before).toFixed(2);
               return (
-                <tr key={i}>
+                <tr key={h.id || i}>
                   <td>{h.dt_text}</td>
                   <td>{h.reason}</td>
                   <td>{f2(h.real_price_after)}</td>
                   <td>{f2(h.price_after)}</td>
                   <td>{diff > 0 ? <span style={{ color: "red" }}>▲ +{f2(diff)}</span> : diff < 0 ? <span style={{ color: "blue" }}>▼ {f2(diff)}</span> : "-"}</td>
+                  {editable ? (
+                    <td className="hist-act">
+                      <button type="button" className="icon-btn" title="수정" aria-label="수정" onClick={() => setEditing(h)}>
+                        ✏️
+                      </button>
+                      <button type="button" className="icon-btn del" title="삭제" aria-label="삭제" onClick={() => setDelAsk(h)}>
+                        🗑️
+                      </button>
+                    </td>
+                  ) : null}
                 </tr>
               );
             })}
@@ -164,6 +212,36 @@ function HistoryBlock({ hist, product }) {
       </div>
       </div>
       <PriceChart points={points} />
+      {editing ? (
+        <HistEditPopup
+          h={editing}
+          product={product}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            onChanged && onChanged();
+          }}
+        />
+      ) : null}
+      <ConfirmModal
+        open={!!delAsk}
+        title="🗑️ 주가 변동 기록 삭제"
+        message={delAsk ? `${delAsk.dt_text}\n'${delAsk.reason}' 기록을 삭제할까요?` : ""}
+        yesText="삭제"
+        onYes={async () => {
+          const h = delAsk;
+          setDelErr("");
+          const r = await api("invest_hist_delete", { id: h.id });
+          setDelAsk(null);
+          if (!r.ok) return setDelErr(r.error || "삭제 실패");
+          app.toast(`주가 기록 삭제 완료${r.repriced ? ` (진행 중 투자 ${r.repriced}건 매입주가 정정)` : ""}`, "🗑️");
+          onChanged && onChanged();
+        }}
+        onNo={() => setDelAsk(null)}
+      >
+        <div className="caption center">그 앞 기록의 주가로 이어 붙여요. 마지막 기록이면 현재 주가도 그 앞 값으로 돌아가요.</div>
+      </ConfirmModal>
+      {delErr ? <ErrorBox>{delErr}</ErrorBox> : null}
     </div>
   );
 }
@@ -379,7 +457,7 @@ export default function Invest({ adminMode }) {
           {adminLike ? (
             <Expander title={`${p.name} 주가 변동 반영`}>
               <PriceUpdate key={`${p.product_id}-${p.real_price}`} p={p} onSaved={reload} />
-              <HistoryBlock hist={histories[p.product_id]} product={p} />
+              <HistoryBlock hist={histories[p.product_id]} product={p} editable onChanged={reload} />
             </Expander>
           ) : (
             <Expander title={`${p.name} 주가 변동 내역`}>

@@ -49,6 +49,7 @@ async function getHistory(db, pid, limit = 120) {
     const pb = as2(x.price_before ?? x.price ?? 0);
     const pa = as2(x.price_after ?? x.price ?? 0);
     return {
+      id: String(x._id),
       dt_text: fmtInvestDt(x.created_at),
       reason: str(x.reason).trim(),
       price_before: pb,
@@ -64,7 +65,72 @@ function isAdminLike(ctx, adminMode) {
   return ctx.isAdmin || ctx.perms.has("admin::📈 투자");
 }
 
+// 주가 변동 기록을 고치거나 지웠을 때 함께 맞춰 줄 것들
+// - 다음 기록의 '변동 전 주가'를 새 값으로 이어 줌 (그래프·등락 표시가 자연스럽게 당겨짐)
+// - 마지막 기록이었다면 종목의 현재 주가도 바꿈 → 진행 중인 투자의 평가 금액에 바로 반영
+// - 그 주가가 적용되던 기간에 산 '아직 회수 안 한' 투자는 매입 주가도 새 값으로 (회수 끝난 투자는 그대로)
+async function relinkHistory(db, h, { newPrice, newReal }) {
+  const pid = str(h.product_id);
+  const next = (await db.collection("invest_price_history").find({ product_id: pid, created_at: { $gt: h.created_at } }).sort({ created_at: 1 }).limit(1).toArray())[0];
+  if (next) {
+    await db.collection("invest_price_history").updateOne({ _id: next._id }, { $set: { price_before: as2(newPrice), real_price_before: as2(newReal) } });
+  } else {
+    await col(db, "invest_products").set(pid, { real_price: as2(newReal), current_price: as2(newPrice), updated_at: new Date() }, true);
+  }
+  const oldPrice = as2(h.price_after ?? h.price ?? 0);
+  if (as2(oldPrice) === as2(newPrice)) return 0;
+  const win = { $gte: h.created_at };
+  if (next) win.$lt = next.created_at;
+  const open = await db.collection("invest_ledger").find({ product_id: pid, redeemed: { $ne: true }, buy_at: win }).toArray();
+  let n = 0;
+  for (const x of open) {
+    if (Math.abs(as2(x.buy_price ?? 0) - oldPrice) > 0.005) continue;
+    await db.collection("invest_ledger").updateOne({ _id: x._id }, { $set: { buy_price: as2(newPrice), buy_real_price: as2(newReal) } });
+    n += 1;
+  }
+  return n;
+}
+
+async function productFor(db, pid) {
+  const p = (await getProducts(db, false)).find((x) => x.product_id === String(pid));
+  if (!p) fail("종목을 찾지 못했어요.");
+  return p;
+}
+
 export default {
+  // ✏️ 주가 변동 기록 수정: 변동 사유와 실제주가
+  async invest_hist_update(ctx, { id, reason, real_price }) {
+    requireAny(ctx, INV_ADMIN);
+    const db = ctx.db;
+    reason = str(reason).trim();
+    if (!reason) fail("변동 사유를 입력해 주세요.");
+    const rp = toFloat(real_price, NaN);
+    if (!Number.isFinite(rp)) fail("실제주가를 숫자로 입력해 주세요.");
+    const h = await db.collection("invest_price_history").findOne({ _id: String(id) });
+    if (!h) fail("이미 지워졌거나 찾을 수 없는 기록이에요.");
+    const p = await productFor(db, h.product_id);
+    const norm = normalizeTo100(rp, p.min_price, p.max_price);
+    await db.collection("invest_price_history").updateOne({ _id: h._id }, { $set: { reason, price_after: as2(norm), real_price_after: as2(rp), updated_at: new Date() } });
+    const repriced = await relinkHistory(db, h, { newPrice: norm, newReal: rp });
+    return { repriced };
+  },
+
+  // 🗑️ 주가 변동 기록 삭제: 그 앞 주가로 이어 붙임
+  async invest_hist_delete(ctx, { id }) {
+    requireAny(ctx, INV_ADMIN);
+    const db = ctx.db;
+    const h = await db.collection("invest_price_history").findOne({ _id: String(id) });
+    if (!h) fail("이미 지워졌거나 찾을 수 없는 기록이에요.");
+    const prev = (await db.collection("invest_price_history").find({ product_id: str(h.product_id), created_at: { $lt: h.created_at } }).sort({ created_at: -1 }).limit(1).toArray())[0];
+    const back = prev
+      ? { newPrice: as2(prev.price_after ?? prev.price ?? 0), newReal: as2(prev.real_price_after ?? prev.price_after ?? 0) }
+      : { newPrice: as2(h.price_before ?? h.price ?? 0), newReal: as2(h.real_price_before ?? h.price_before ?? 0) };
+    const r = await db.collection("invest_price_history").deleteOne({ _id: h._id });
+    if (!r.deletedCount) fail("이미 지워진 기록이에요.");
+    const repriced = await relinkHistory(db, h, back);
+    return { repriced };
+  },
+
   async invest_load(ctx, { admin_mode }) {
     requireLogin(ctx);
     const db = ctx.db;
