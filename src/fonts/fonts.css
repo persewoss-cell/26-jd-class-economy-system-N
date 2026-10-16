@@ -1,0 +1,6 @@
+/* 글씨체 — 모두 사이트 안에 넣어 둠(학교망에서 외부 글꼴 서버가 막혀도 보이게)
+   제목: 주아(Jua) / 표·본문: SUIT  (둘 다 SIL Open Font License) */
+@font-face { font-family: "SUIT"; font-weight: 400; font-style: normal; font-display: swap; src: url("./SUIT-Regular.woff2") format("woff2"); }
+@font-face { font-family: "SUIT"; font-weight: 500 600; font-style: normal; font-display: swap; src: url("./SUIT-SemiBold.woff2") format("woff2"); }
+@font-face { font-family: "SUIT"; font-weight: 700; font-style: normal; font-display: swap; src: url("./SUIT-Bold.woff2") format("woff2"); }
+@font-face { font-family: "SUIT"; font-weight: 800 900; font-style: normal; font-display: swap; src: url("./SUIT-ExtraBold.woff2") format("woff2"); }

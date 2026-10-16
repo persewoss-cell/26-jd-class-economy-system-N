@@ -2,6 +2,9 @@
    학급 경제 시스템 – 파스텔(민트 + 라벤더) 테마 / 태블릿 가로 최적화
    ========================================================= */
 :root {
+  /* 글씨체: 제목은 주아, 표·본문은 SUIT */
+  --font-title: "Jua", "SUIT", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-body: "SUIT", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
   --bg: #f4f7fb;
   --card: #ffffff;
   --text: #2d3748;
@@ -42,7 +45,7 @@
 * { box-sizing: border-box; }
 html, body, #root { margin: 0; padding: 0; background: var(--bg); color: var(--text); }
 body {
-  font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+  font-family: var(--font-body);
   font-size: 16px;
   line-height: 1.5;
   letter-spacing: -0.01em;
@@ -518,8 +521,10 @@ table.ledger { border-collapse: separate; border-spacing: 0; font-size: 0.92rem;
 .icon-btn.del:hover { border-color: var(--out); background: var(--out-l); }
 
 /* 로그기록: 묶음 색 구분 + 되돌리기 */
-.log-tbl tr.grp-shade td { background: #f3f5f8; }
-.log-tbl tbody tr:hover td { background: var(--mint-l); }
+/* 기본 줄무늬 끔 — 같은 묶음끼리 같은 색(연한 회색 ↔ 흰색 번갈아) */
+table.tbl.log-tbl tbody tr:nth-child(n) td { background: #ffffff; }
+table.tbl.log-tbl tbody tr.grp-shade:nth-child(n) td { background: #eef1f5; }
+table.tbl.log-tbl tbody tr:nth-child(n):hover td { background: var(--mint-l); }
 .log-tbl .undo-h { width: 5.2rem; }
 .log-tbl td.undo-cell { text-align: center; vertical-align: middle; border-left: 1px solid #eef1f5; }
 .undo-btn { font-size: 0.9rem; }
@@ -536,3 +541,16 @@ table.ledger { border-collapse: separate; border-spacing: 0; font-size: 0.92rem;
 .log-tbl td:nth-child(3) { white-space: normal; min-width: 5.8rem; max-width: 9rem; word-break: keep-all; }
 .log-tbl td:nth-child(5) { white-space: normal; min-width: 11rem; max-width: 22rem; text-align: left; word-break: keep-all; }
 .log-tbl td:nth-child(4) { white-space: nowrap; }
+
+/* ---------- 글씨체: 제목끼리 / 표·본문끼리 ---------- */
+.brand-title, .login-title, .h2, .h3, .subheader, .h4, .main-menu .mm, .subtabs .st, .modal-title, .modal-head, .modal-msg, .expander > .exp-head, .sum-name {
+  font-family: var(--font-title);
+  font-weight: 400; /* 주아는 한 가지 굵기 — 가짜 굵게 처리 방지 */
+  letter-spacing: 0;
+}
+.h3, .subheader { font-size: 1.28rem; }
+.h4 { font-size: 1.1rem; }
+.brand-title { font-size: 1.45rem; }
+.main-menu .mm { font-size: 0.86rem; }
+.expander > .exp-head { font-size: 1rem; }
+.num-cell, .dep-num, td.n { font-variant-numeric: tabular-nums; }
