@@ -554,3 +554,31 @@ table.tbl.log-tbl tbody tr:nth-child(n):hover td { background: var(--mint-l); }
 .main-menu .mm { font-size: 0.86rem; }
 .expander > .exp-head { font-size: 1rem; }
 .num-cell, .dep-num, td.n { font-variant-numeric: tabular-nums; }
+
+/* ---------- 줄 넘김 방지 (글씨체 변경 후 점검) ---------- */
+/* 표 머리글: 글자와 정렬 세모가 한 줄에 */
+.th-in, .sort-head { white-space: nowrap; flex-wrap: nowrap; }
+/* 통계·신용 장부 머리글: 날짜 한 줄 + 제출물 이름 한 줄 (각 줄은 넘기지 않음) */
+.ledger thead th { white-space: nowrap; }
+.ledger .lg-no { width: 4.4rem; min-width: 4.4rem; }
+.ledger .lg-name { left: 4.4rem; }
+.ledger td { white-space: nowrap; }
+/* 로그 표: 내역만 줄바꿈, 나머지는 한 줄 */
+.log-tbl td:nth-child(2), .log-tbl td:nth-child(3) { white-space: nowrap; min-width: 0; max-width: none; }
+/* 투자 주가 변동 표: 한 줄로 (넘치면 표 안에서 옆으로 밀어 보기) */
+.inv-hist { grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); }
+.inv-hist table.inv_hist_table th, .inv-hist table.inv_hist_table td { padding: 6px 7px; }
+.inv-hist table.inv_hist_table td:nth-child(1), .inv-hist table.inv_hist_table td:nth-child(2) { white-space: nowrap; min-width: 0; }
+/* 로그 표는 칸이 많아 조금 더 촘촘하게 (줄바꿈 없이 화면 안에) */
+.log-tbl th, .log-tbl td { padding: 0.42rem 0.32rem; font-size: 0.78rem; }
+.log-tbl .sort-btn { min-width: 1.05rem; padding: 0.1rem 0.1rem; font-size: 0.62rem; }
+.log-tbl .th-in { gap: 0.1rem; }
+.log-tbl td:nth-child(5) { min-width: 7.5rem; }
+.log-tbl .undo-h { width: 3.6rem; }
+/* 좁은 가로 화면(약 1200px 이하, 예: 갤럭시 탭 S9 FE): 주가 표를 넓게, 그래프는 그 아래 */
+@media (max-width: 1220px) {
+  .inv-hist { grid-template-columns: 1fr; }
+  .inv-hist-table { min-height: 0; }
+  .inv-hist-table .inv_hist_table_wrap { position: static; height: auto; max-height: 300px; }
+  .inv-hist .chart { max-width: 760px; width: 100%; justify-self: center; }
+}

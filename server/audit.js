@@ -13,7 +13,7 @@ async function stu(db, sid) {
 async function stus(db, sids) {
   const list = [];
   for (const sid of (sids || []).map(String)) list.push(await stu(db, sid));
-  return list.length > 3 ? `${list.slice(0, 3).join(", ")} 외 ${list.length - 3}명` : list.join(", ");
+  return list.length > 1 ? `${list[0]} 외 ${list.length - 1}명` : list.join("");
 }
 const doc = (db, c, id) => (id ? db.collection(c).findOne({ _id: String(id) }) : null);
 const prodName = async (db, pid) => str((await doc(db, "invest_products", pid))?.name) || "종목";

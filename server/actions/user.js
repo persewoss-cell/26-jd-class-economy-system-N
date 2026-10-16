@@ -2,14 +2,14 @@
 import { col } from "../db.js";
 import { fail, requireAny, requireStudent } from "../auth.js";
 import { getCreditCfg, listStatSubmissions, investSummaryFor } from "../core.js";
-import { str, toInt, ior, toDate, fmtKrDatetimeNoYear, fmtMd, kstParts, normStatus, scoreToGrade } from "../../shared/format.js";
+import { str, toInt, ior, toDate, fmtMd, kstParts, normStatus, scoreToGrade } from "../../shared/format.js";
 
 const CAT = {
   deposit: "입금", withdraw: "출금", maturity: "적금 만기", revert: "되돌리기", rollback: "되돌리기", payroll: "월급",
   manual: "수동지급", income: "세입", expense: "세출", auto: "자동처리", stat_submission: "통계 제출", schedule: "일정",
   mart_approved: "마트 승인", auction_ledger: "경매 장부", lottery_ledger: "복권 장부", pending: "승인 대기",
   approved: "승인 완료", rejected: "승인 거절", created: "생성", updated: "수정", deleted: "삭제", active: "진행중",
-  canceled: "해지", matured: "만기", tab_permission: "탭 권한", admin_permission: "관리자기능 권한", credit_adjust: "신용점수 수동조정",
+  canceled: "해지", matured: "만기", tab_permission: "탭 권한", admin_permission: "관리자 권한", credit_adjust: "신용 조정",
 };
 
 // 되돌리기 불가 기록 (여러 단계가 얽혀 있거나 시스템이 처리한 것)
@@ -99,6 +99,14 @@ function groupRows(rows) {
   });
 }
 
+// 국고 기록의 '대상'이 영어 코드로 저장된 경우 한글로 (예전 기록 포함, 화면 표시 때 바꿈)
+const ACTOR_KO = {
+  treasury: "국고(직접)", mart: "마트", deposit_approve: "입금 승인", auction: "경매", lottery: "복권", lottery_admin: "복권(관리자)",
+  system_salary: "시스템(월급)", admin_auto: "관리자", auto: "자동", admin: "관리자", system: "시스템", student: "학생", bank: "은행",
+  savings: "적금", invest: "투자", payroll: "월급", salary: "월급",
+};
+const actorKo = (a) => ACTOR_KO[str(a).trim().toLowerCase()] || (/^[a-z_]+$/i.test(str(a).trim()) ? "국고" : str(a).trim()) || "국고";
+
 async function recent(db, name, field, limit) {
   return await db.collection(name).find({}).sort({ [field]: -1 }).limit(limit).toArray();
 }
@@ -126,7 +134,13 @@ async function buildLogs(db, perSource, maxRows) {
   const P = Object.fromEntries(Object.keys(jobs).map((k, i) => [k, vals[i]]));
   const smap = {};
   for (const d of await P._students) smap[String(d._id)] = { name: str(d.name), no: toInt(d.no) };
-  const t = (v) => (toDate(v) ? fmtKrDatetimeNoYear(v) : "");
+  // 로그 표가 한 줄에 들어가도록 짧게: 10/17(토) 오전 1:03
+  const t = (v) => {
+    const p = toDate(v) ? kstParts(v) : null;
+    if (!p) return "";
+    const h12 = p.hour % 12 || 12;
+    return `${p.month}/${p.day}(${p.dow}) ${p.hour < 12 ? "오전" : "오후"} ${h12}:${String(p.minute).padStart(2, "0")}`;
+  };
   const ts = (v) => toDate(v)?.getTime() || 0;
   const who = (sid) => {
     const s = smap[sid] || {};
@@ -148,9 +162,9 @@ async function buildLogs(db, perSource, maxRows) {
     push({ 시간: t(x.created_at), 탭: "💰입금/출금", 내역: str(x.memo), 입금: amt > 0 ? amt : 0, 출금: amt < 0 ? -amt : 0, 기록자: str(x.recorder) || "-", 대상: who(str(x.student_id)), 분류: str(x.type), 변경후잔액: toInt(x.balance_after) }, ts(x.created_at));
   }
   for (const x of await P.treasury_ledger) {
-    const actor = str(x.actor) || "국고";
+    const actor = actorKo(x.actor);
     meta("treasury_ledger", x, [G(x), B(x), x.salary_tx_id ? `t:${x.salary_tx_id}` : null], { money: true, block: treBlock(x) });
-    push({ 시간: t(x.created_at), 탭: "🏛️ 국세청(국고)", 내역: str(x.memo), 입금: toInt(x.income), 출금: toInt(x.expense), 기록자: str(x.recorder) || "-", 대상: actor.toLowerCase() === "system_salary" ? "시스템(월급)" : actor, 분류: str(x.type), 변경후잔액: toInt(x.balance_after) }, ts(x.created_at));
+    push({ 시간: t(x.created_at), 탭: "🏛️ 국세청(국고)", 내역: str(x.memo), 입금: toInt(x.income), 출금: toInt(x.expense), 기록자: str(x.recorder) || "-", 대상: actor, 분류: str(x.type), 변경후잔액: toInt(x.balance_after) }, ts(x.created_at));
   }
   for (const x of await P.mart_ledger) {
     meta("mart_ledger", x, [G(x)]);
@@ -230,10 +244,11 @@ async function buildLogs(db, perSource, maxRows) {
   // 같은 묶음은 붙여서 보이게 (묶음 순서는 가장 최근 기록 기준)
   rows.forEach((r, i) => (r._i = i));
   rows.sort((a, b) => a._m.g - b._m.g || a._i - b._i);
-  return rows.slice(0, maxRows).map(({ _s, _m, _i, ...r }) => ({
+  return rows.slice(0, maxRows).map(({ _m, _i, _s, ...r }) => ({
     ...r,
     분류: CAT[str(r.분류).trim().toLowerCase()] ?? str(r.분류),
     _g: _m.g,
+    _ts: _s,
     _undo: _m.undo || "",
     _ref: _m.c && (_m.c === "transactions" || _m.c === "treasury_ledger") ? `${_m.c === "transactions" ? "t" : "r"}:${_m.id}` : "",
   }));

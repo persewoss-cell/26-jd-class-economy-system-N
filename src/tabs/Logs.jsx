@@ -7,7 +7,7 @@ const COLS = ["번호", "시간", "대상", "탭", "내역", "입금", "출금",
 
 // 로그 표: 함께 일어난 기록끼리 연한 회색/흰색으로 번갈아 묶고, 묶음마다 되돌리기 아이콘 하나
 function LogTable({ rows, allRows, onUndo }) {
-  const srt = useSort(rows);
+  const srt = useSort(rows, (r, c) => (c === "시간" ? r._ts : r[c])); // 시간은 실제 시각으로 정렬
   const sorted = srt.sort.col !== null;
   const shade = {};
   let k = 0;

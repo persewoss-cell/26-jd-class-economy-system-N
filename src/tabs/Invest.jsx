@@ -104,9 +104,20 @@ function wrapCanvas(g, text, maxW, maxLines = 3) {
   return lines;
 }
 
-const UP = "#e5484d";
-const DOWN = "#2f6fea";
-const FLAT = "#1f2937";
+// 화면·저장 그래프 공통: 파스텔 굵은 선(오르면 빨강 / 내리면 파랑 / 그대로면 검정, 35% 투명)
+const UP = "#ef4444";
+const DOWN = "#3b82f6";
+const FLAT = "#111827";
+const LINE_ALPHA = 0.35;
+const segColor = (a, b) => (b > a ? UP : b < a ? DOWN : FLAT);
+// 세로 눈금: 점들이 테두리에 붙지 않게 위아래 여유를 두고 일정 간격(5~6칸) 숫자
+function yScale(vals) {
+  const vmin = Math.min(...vals);
+  const vmax = Math.max(...vals);
+  const span = vmax - vmin || Math.abs(vmax) || 1;
+  const [lo, hi, ticks] = niceAxis([vmin - span * 0.12, vmax + span * 0.12]);
+  return { lo, hi: hi > lo ? hi : lo + 1, ticks };
+}
 
 // A4 가로 비율(297:210) 그림: 제목 + 왼쪽 눈금 숫자 + 꺾은선(상승 빨강/하락 파랑/보합 검정) + 아래 항목
 async function chartImage(points, title) {
@@ -140,11 +151,8 @@ async function chartImage(points, title) {
   const T = 400;
   const B = CH - 300;
   const vals = points.map((p) => Number(p.y) || 0);
-  const vmin = Math.min(...vals);
-  const vmax = Math.max(...vals);
-  const span = vmax - vmin || Math.abs(vmax) || 1;
-  const [lo, hi, ticks] = niceAxis([vmin - span * 0.12, vmax + span * 0.12]);
-  const y = (v) => B - ((v - lo) / (hi - lo || 1)) * (B - T);
+  const { lo, hi, ticks } = yScale(vals);
+  const y = (v) => B - ((v - lo) / (hi - lo)) * (B - T);
   const band = (R - L) / Math.max(n, 1);
   const x = (i) => L + band * (i + 0.5);
 
@@ -177,10 +185,6 @@ async function chartImage(points, title) {
   g.lineTo(L, B);
   g.lineTo(R, B);
   g.stroke();
-  g.textAlign = "left";
-  g.fillStyle = "#8a94a6";
-  g.font = `700 34px ${BF}`;
-  g.fillText("환산주가", L - 10, T - 70);
 
   // 아래 항목 (눈금 표시 + 줄바꿈 글씨)
   const labFs = Math.max(26, Math.min(40, band * 0.32));
@@ -197,11 +201,12 @@ async function chartImage(points, title) {
     wrapCanvas(g, p.label, band - 24).forEach((line, k) => g.fillText(line, x(i), B + 52 + k * (labFs + 10)));
   });
 
-  // 꺾은선: 구간마다 오르면 빨강, 내리면 파랑, 그대로면 검정
-  const col = (a, b) => (b > a ? UP : b < a ? DOWN : FLAT);
+  // 꺾은선: 앱과 같은 파스텔 굵은 선
+  const col = segColor;
   g.lineCap = "round";
   g.lineJoin = "round";
-  g.lineWidth = 9;
+  g.lineWidth = 28;
+  g.globalAlpha = LINE_ALPHA;
   for (let i = 0; i < n - 1; i++) {
     g.strokeStyle = col(vals[i], vals[i + 1]);
     g.beginPath();
@@ -209,25 +214,26 @@ async function chartImage(points, title) {
     g.lineTo(x(i + 1), y(vals[i + 1]));
     g.stroke();
   }
+  g.globalAlpha = 1;
   // 점 + 값
   const valFs = Math.max(28, Math.min(48, band * 0.36));
   points.forEach((p, i) => {
     const v = vals[i];
-    const c = i > 0 ? col(vals[i - 1], v) : "#6b7280";
+    const c = i > 0 ? col(vals[i - 1], v) : "#9ca3af";
     g.beginPath();
-    g.arc(x(i), y(v), 15, 0, Math.PI * 2);
+    g.arc(x(i), y(v), 14, 0, Math.PI * 2);
     g.fillStyle = "#ffffff";
     g.fill();
-    g.lineWidth = 7;
+    g.lineWidth = 6;
     g.strokeStyle = c;
     g.stroke();
     const prev = i > 0 ? vals[i - 1] : v;
     const next = i < n - 1 ? vals[i + 1] : v;
     const below = i > 0 && v < prev && v <= next; // 골짜기 점은 값 글씨를 아래에
     g.font = `800 ${valFs}px ${BF}`;
-    g.fillStyle = i > 0 ? c : "#374151";
+    g.fillStyle = "#374151";
     g.textAlign = "center";
-    const ty = below ? y(v) + valFs + 18 : y(v) - valFs + 4;
+    const ty = below ? y(v) + valFs + 22 : y(v) - valFs + 2;
     // 선 위에 겹쳐도 잘 보이게 흰 테두리
     g.lineWidth = 12;
     g.strokeStyle = "#ffffff";
@@ -277,62 +283,64 @@ async function printChart(points, title) {
 // 꺾은선 그래프: 굵고 부드러운 선 + 점마다 값 표시. 상승 빨강 / 하락 파랑 / 보합 검정
 // title 을 주면 오른쪽 위에 💾 저장 / 🖨️ 인쇄 버튼
 function PriceChart({ points, title }) {
+  // 저장용 그림과 같은 모양: 왼쪽 일정 간격 눈금 숫자 + 축 + 파스텔 굵은 선 + 점마다 값 + 아래 항목
   const W = 620;
   const plotH = 230;
-  const padX = 24;
-  const padT = 32;
+  const padL = 44;
+  const padR = 14;
+  const padT = 30;
   const n = points.length;
-  const band = (W - padX * 2) / Math.max(n, 1);
-  const perLine = Math.max(3, Math.floor(band / 16));
-  const labels = points.map((p) => wrapLabel(p.label, perLine));
+  const band = (W - padL - padR) / Math.max(n, 1);
+  const perLine = Math.max(3, Math.floor((band - 4) / 12.5));
+  const labels = points.map((p) => wrapLabel(p.label, perLine).slice(0, 3));
   const maxLines = Math.max(1, ...labels.map((l) => l.length));
-  const H = padT + plotH + 18 + maxLines * 19;
-  const [, , ticks] = niceAxis(points.map((p) => p.y));
-  const x = (i) => padX + band * (i + 0.5);
-  // 가장 높은/낮은 점이 테두리에 붙지 않게 위아래 여유
-  const vmin = Math.min(...points.map((p) => p.y));
-  const vmax = Math.max(...points.map((p) => p.y));
-  const span = vmax - vmin || Math.abs(vmax) || 1;
-  const ylo = vmin - span * 0.18;
-  const yhi = vmax + span * 0.18;
-  const y = (v) => padT + plotH * (1 - (v - ylo) / (yhi - ylo || 1));
-  const minor = [];
-  for (let k = 0; k < ticks.length - 1; k++) for (let m = 1; m < 4; m++) minor.push(ticks[k] + ((ticks[k + 1] - ticks[k]) * m) / 4);
-  const inPlot = (t) => y(t) >= padT - 6 && y(t) <= padT + plotH + 6;
-  const colorOf = (a, b) => (b > a ? "#ef4444" : b < a ? "#3b82f6" : "#111827");
+  const B = padT + plotH;
+  const H = B + 14 + maxLines * 17 + 6;
+  const vals = points.map((p) => Number(p.y) || 0);
+  const { lo, hi, ticks } = yScale(vals);
+  const x = (i) => padL + band * (i + 0.5);
+  const y = (v) => B - ((v - lo) / (hi - lo)) * plotH;
+  const mids = ticks.slice(0, -1).map((t, k) => (t + ticks[k + 1]) / 2);
   const svgEl = (
-      <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} preserveAspectRatio="xMidYMid meet" role="img" aria-label="주가 변동 그래프" fontFamily="SUIT, Malgun Gothic, Apple SD Gothic Neo, sans-serif">
-        {minor.filter(inPlot).map((t, k) => (
-          <line key={`m${k}`} x1={padX / 2} x2={W - padX / 2} y1={y(t)} y2={y(t)} stroke="#f1f3f6" strokeWidth="1" />
-        ))}
-        {ticks.filter(inPlot).map((t) => (
-          <line key={t} x1={padX / 2} x2={W - padX / 2} y1={y(t)} y2={y(t)} stroke="#e3e7ee" strokeWidth="1" />
-        ))}
-        {points.slice(0, -1).map((p, i) => {
-          const q = points[i + 1];
-          return <line key={i} x1={x(i)} y1={y(p.y)} x2={x(i + 1)} y2={y(q.y)} stroke={colorOf(p.y, q.y)} strokeOpacity="0.35" strokeWidth="9" strokeLinecap="round" />;
-        })}
-        {points.map((p, i) => {
-          const prev = i > 0 ? points[i - 1].y : p.y;
-          const next = i < n - 1 ? points[i + 1].y : p.y;
-          const below = p.y < prev && p.y <= next && i > 0; // 골짜기 점은 값 글자를 아래에
-          return (
-            <g key={i}>
-              <circle cx={x(i)} cy={y(p.y)} r="4.5" fill="#fff" stroke={i > 0 ? colorOf(prev, p.y) : "#9ca3af"} strokeWidth="2">
-                <title>{`${p.label}: ${p.y}`}</title>
-              </circle>
-              <text x={x(i)} y={below ? y(p.y) + 25 : y(p.y) - 13} fontSize="18" fontWeight="800" textAnchor="middle" fill="#374151">
-                {p.y}
+    <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} preserveAspectRatio="xMidYMid meet" role="img" aria-label="주가 변동 그래프" fontFamily="SUIT, Malgun Gothic, Apple SD Gothic Neo, sans-serif">
+      {mids.map((t, k) => (
+        <line key={`m${k}`} x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} stroke="#f2f4f7" strokeWidth="1" />
+      ))}
+      {ticks.map((t) => (
+        <g key={t}>
+          <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} stroke="#e3e7ee" strokeWidth="1" />
+          <text x={padL - 7} y={y(t)} dy="0.35em" fontSize="12.5" fontWeight="600" textAnchor="end" fill="#8a94a6">
+            {+t.toFixed(2)}
+          </text>
+        </g>
+      ))}
+      <polyline points={`${padL},${padT - 8} ${padL},${B} ${W - padR},${B}`} fill="none" stroke="#c4cbd6" strokeWidth="1.5" />
+      {points.slice(0, -1).map((p, i) => (
+        <line key={i} x1={x(i)} y1={y(vals[i])} x2={x(i + 1)} y2={y(vals[i + 1])} stroke={segColor(vals[i], vals[i + 1])} strokeOpacity={LINE_ALPHA} strokeWidth="9" strokeLinecap="round" />
+      ))}
+      {points.map((p, i) => {
+        const v = vals[i];
+        const prev = i > 0 ? vals[i - 1] : v;
+        const next = i < n - 1 ? vals[i + 1] : v;
+        const below = i > 0 && v < prev && v <= next; // 골짜기 점은 값 글자를 아래에
+        return (
+          <g key={i}>
+            <line x1={x(i)} x2={x(i)} y1={B} y2={B + 5} stroke="#c4cbd6" strokeWidth="1.5" />
+            <circle cx={x(i)} cy={y(v)} r="4.5" fill="#fff" stroke={i > 0 ? segColor(prev, v) : "#9ca3af"} strokeWidth="2">
+              <title>{`${p.label}: ${v}`}</title>
+            </circle>
+            <text x={x(i)} y={below ? y(v) + 21 : y(v) - 11} fontSize="15" fontWeight="800" textAnchor="middle" fill="#374151" stroke="#fff" strokeWidth="4" paintOrder="stroke">
+              {+v.toFixed(2)}
+            </text>
+            {labels[i].map((line, k) => (
+              <text key={k} x={x(i)} y={B + 21 + k * 17} fontSize="12" fontWeight="600" textAnchor="middle" fill="#4b5563">
+                {line}
               </text>
-              {labels[i].map((line, k) => (
-                <text key={k} x={x(i)} y={padT + plotH + 24 + k * 19} fontSize="15.5" textAnchor="middle" fill="#4b5563">
-                  {line}
-                </text>
-              ))}
-            </g>
-          );
-        })}
-      </svg>
+            ))}
+          </g>
+        );
+      })}
+    </svg>
   );
   return (
     <div className="chart">
