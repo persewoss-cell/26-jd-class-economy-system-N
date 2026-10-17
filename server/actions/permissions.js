@@ -18,7 +18,7 @@ const TAB_BUNDLE = {
   "🗓️ 일정": ["schedule_read", "schedule_write"],
 };
 
-const EXCLUDED = ["👥 계정 정보", "🏦 내 통장", "🏦 은행(적금)", "📈 투자", "🛒마트", "🏷️ 경매", "🍀 복권"];
+const EXCLUDED = ["👥 계정 정보", "🏦 내 통장", "🏦 은행(적금)", "📈 투자", "🛒마트", "🏷️ 경매", "🍀 복권", "🧾 로그기록"];
 export const ALLOWED_TAB_OPTIONS = ALL_TABS.filter((t) => !EXCLUDED.includes(t));
 const ADMIN_TABS = ["🏦 내 통장", "🏦 은행(적금)", "📈 투자", "🛒마트"];
 export const ADMIN_OPTION_LABELS = ["💰입금/출금(관리자)", "🏦 은행(적금)(관리자)", "📈 투자(관리자)", "🛒마트(관리자)"];

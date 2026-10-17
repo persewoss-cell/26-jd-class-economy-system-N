@@ -7,7 +7,7 @@ import { useApp, useLoad, Cols, H3, Caption, Btn, TextInput, Select, NumberInput
 const BID_COLS = ["입찰 가격", "입찰일시", "번호", "이름"];
 const pad2 = (n) => String(n).padStart(2, "0");
 
-function RefundApply({ roundId, withDownload, bids, roundNo, onDone }) {
+function RefundApply({ roundId, withDownload, bids, roundNo, onDone, guide }) {
   const app = useApp();
   const [no, setNo] = useState(false);
   const [yes, setYes] = useState(false);
@@ -23,10 +23,18 @@ function RefundApply({ roundId, withDownload, bids, roundNo, onDone }) {
       onDone();
     } else setErr(r.error || "장부 반영 실패");
   };
+  // 순서 안내(guide): 반환 여부 두 칸이 번갈아 반짝 → 고르면 장부반영 버튼이 반짝
+  const chosen = no || yes;
   const boxes = [
-    <Checkbox key="n" label="낙찰금 미반환" checked={no} onChange={(v) => { setNo(v); if (v) setYes(false); }} />,
-    <Checkbox key="y" label="낙찰금 반환(반환액 90%)" checked={yes} onChange={(v) => { setYes(v); if (v) setNo(false); }} />,
-    <Btn key="b" onClick={apply}>장부반영</Btn>,
+    <span key="n" className={`neon-wrap ${guide && !chosen ? "neon-a" : ""}`}>
+      <Checkbox label="낙찰금 미반환" checked={no} onChange={(v) => { setNo(v); if (v) setYes(false); }} />
+    </span>,
+    <span key="y" className={`neon-wrap ${guide && !chosen ? "neon-b" : ""}`}>
+      <Checkbox label="낙찰금 반환(반환액 90%)" checked={yes} onChange={(v) => { setYes(v); if (v) setNo(false); }} />
+    </span>,
+    <Btn key="b" className={guide && chosen ? "neon" : ""} onClick={apply}>
+      장부반영
+    </Btn>,
   ];
   return (
     <>
@@ -75,6 +83,8 @@ function AuctionAdmin() {
     } else setErr(r.error || "경매 마감 실패");
   };
   const picked = data.closed.find((r) => r.round_id === pickId);
+  // 순서 안내: 개시 → 마감 → (낙찰금 미반환 ↔ 반환) → 장부반영. 지금 눌러야 할 것만 반짝
+  const pendingLedger = !data.open && data.latest && !data.latest.ledger_applied && (data.latest.bids || []).length > 0;
   const pickLabel = (r) => `${pad2(r.round_no)}회 | ${r.bid_name}`;
   return (
     <>
@@ -82,8 +92,12 @@ function AuctionAdmin() {
       <Cols w={[2.4, 1.6, 0.8, 0.8]} va="bottom">
         <TextInput label="입찰 내역" value={bidName} onChange={setBidName} />
         <TextInput label="소속" value={aff} onChange={setAff} />
-        <Btn onClick={open}>개시</Btn>
-        <Btn onClick={() => setAskClose(true)}>마감</Btn>
+        <Btn className={data.open || pendingLedger ? "" : "neon"} onClick={open}>
+          개시
+        </Btn>
+        <Btn className={data.open ? "neon" : ""} onClick={() => setAskClose(true)}>
+          마감
+        </Btn>
       </Cols>
       <ConfirmModal
         open={askClose}
@@ -112,7 +126,7 @@ function AuctionAdmin() {
           {data.latest.bids.length ? (
             <>
               <DataTable rows={data.latest.bids} columns={BID_COLS} csvName="경매결과" />
-              <RefundApply roundId={data.latest.round_id} withDownload bids={data.latest.bids} roundNo={data.latest.round_no} onDone={() => app.refresh()} />
+              <RefundApply roundId={data.latest.round_id} withDownload bids={data.latest.bids} roundNo={data.latest.round_no} onDone={() => app.refresh()} guide />
             </>
           ) : (
             <Info>제출된 입찰표가 없습니다.</Info>

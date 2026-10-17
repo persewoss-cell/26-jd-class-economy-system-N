@@ -217,6 +217,19 @@ function LotteryAdmin() {
 
   const cur = data.current;
   const dup = new Set(wn).size !== 4;
+  // 처음 하는 사람도 순서대로: 지금 눌러야 할 버튼만 네온처럼 반짝 (둘 중 고르는 단계는 번갈아)
+  // 개시 → (관리자 복권 참여 ↔ 마감) → 당첨번호 제출 → 당첨금 지급 및 장부 반영
+  const winnersShown = !!(cur && visibleId === cur.round_id && cur.status === "drawn" && cur.winners);
+  const step = data.open
+    ? "join_or_close"
+    : cur && cur.status === "closed"
+      ? "draw"
+      : cur && cur.status === "drawn" && !(cur.payout_done && cur.ledger_applied)
+        ? winnersShown
+          ? "finalize"
+          : "draw"
+        : "open";
+  const glow = (name) => (step === name ? "neon" : step === "join_or_close" && name === "join" ? "neon-a" : step === "join_or_close" && name === "close" ? "neon-b" : "");
   const finalize = async (rid, onOk) => {
     setFinErr("");
     const r = await api("lottery_finalize", { round_id: rid });
@@ -237,8 +250,8 @@ function LotteryAdmin() {
         <NumberInput label="3등 당첨금" stepper={false} min={0} value={cfg.third} onChange={(v) => setCfg((c) => ({ ...c, third: v }))} />
         <NumberInput label="1등 백분율(%)" stepper={false} min={0} max={100} value={cfg.first} onChange={(v) => setCfg((c) => ({ ...c, first: v }))} />
         <NumberInput label="2등 백분율(%)" stepper={false} min={0} max={100} value={cfg.second} onChange={(v) => setCfg((c) => ({ ...c, second: v }))} />
-        <Btn onClick={() => run("lottery_open", { ticket_price: cfg.price, tax_rate: cfg.tax, first_pct: cfg.first, second_pct: cfg.second, third_prize: cfg.third }, (r) => `복권 ${r.round_no}회 개시`, "복권 개시 실패")}>개시</Btn>
-        <Btn onClick={() => setAskClose(true)}>마감</Btn>
+        <Btn className={glow("open")} onClick={() => run("lottery_open", { ticket_price: cfg.price, tax_rate: cfg.tax, first_pct: cfg.first, second_pct: cfg.second, third_prize: cfg.third }, (r) => `복권 ${r.round_no}회 개시`, "복권 개시 실패")}>개시</Btn>
+        <Btn className={glow("close")} onClick={() => setAskClose(true)}>마감</Btn>
       </Cols>
       <ConfirmModal
         open={askClose}
@@ -261,7 +274,7 @@ function LotteryAdmin() {
           <Cols w={[2, 1, 1]} va="bottom">
             <NumberInput label="복권 참여 수" min={1} value={joinCnt} onChange={setJoinCnt} />
             <Checkbox label="국고반영" checked={joinTre} onChange={setJoinTre} />
-            <Btn onClick={() => run("lottery_admin_join", { count: joinCnt, apply_treasury: joinTre }, (r) => `관리자 복권 ${r.count}게임 참여 완료`, "관리자 복권 참여 실패")}>복권 참여</Btn>
+            <Btn className={glow("join")} onClick={() => run("lottery_admin_join", { count: joinCnt, apply_treasury: joinTre }, (r) => `관리자 복권 ${r.count}게임 참여 완료`, "관리자 복권 참여 실패")}>복권 참여</Btn>
           </Cols>
           {data.counts.admin_with > 0 ? <Caption>{`관리자 참여 현황 : 복권 참여수 ${pad(data.counts.admin_with)}  |  총액 ${data.counts.admin_with * data.counts.price}  |  국고반영여부 O`}</Caption> : null}
           {data.counts.admin_without > 0 ? <Caption>{`관리자 참여 현황 : 복권 참여수 ${pad(data.counts.admin_without)}  |  총액 ${data.counts.admin_without * data.counts.price}  |  국고반영여부 X`}</Caption> : null}
@@ -302,7 +315,7 @@ function LotteryAdmin() {
               ) : (
                 <>
                   <Warning>⚠️ 이 회차는 아직 당첨금 지급/장부(국고) 반영이 완료되지 않았습니다.</Warning>
-                  <Btn onClick={() => finalize(pickId)}>당첨금 지급 및 장부 반영</Btn>
+                  <Btn className={cur && pickId === cur.round_id ? glow("finalize") : ""} onClick={() => finalize(pickId)}>당첨금 지급 및 장부 반영</Btn>
                 </>
               )}
             </>
@@ -318,6 +331,7 @@ function LotteryAdmin() {
           <NumberInput key={l} label={`${l} 당첨번호`} min={1} max={20} value={wn[i]} onChange={(v) => setWn((a) => a.map((x, j) => (j === i ? v : x)))} />
         ))}
         <Btn
+          className={glow("draw")}
           disabled={!!(cur && cur.payout_done)}
           onClick={async () => {
             setDrawErr("");
@@ -351,7 +365,7 @@ function LotteryAdmin() {
               ) : (
                 <Info>당첨자가 없습니다.</Info>
               )}
-              <Btn onClick={() => finalize(cur.round_id, () => setVisibleId(""))} disabled={cur.payout_done && cur.ledger_applied}>
+              <Btn className={glow("finalize")} onClick={() => finalize(cur.round_id, () => setVisibleId(""))} disabled={cur.payout_done && cur.ledger_applied}>
                 당첨금 지급 및 장부 반영
               </Btn>
               {cur.payout_done ? <Caption>당첨금 지급: 완료</Caption> : null}
