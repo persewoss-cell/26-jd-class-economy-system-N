@@ -45,6 +45,148 @@ function WinnersTable({ winners, wset }) {
   );
 }
 
+// ---------- 마감된 복권 결과 조회 ----------
+// 맞힌 번호는 빨간 굵은 글씨로
+function NumList({ nums, win }) {
+  return (
+    <>
+      {(nums || []).map((n, j) => (
+        <React.Fragment key={j}>
+          {j ? ", " : ""}
+          {win.has(n) ? <b className="lot-hit">{pad(n)}</b> : pad(n)}
+        </React.Fragment>
+      ))}
+    </>
+  );
+}
+
+const RANK_ICON = { 1: "🥇", 2: "🥈", 3: "🥉" };
+const W_VAL = { 등수: (w) => w.rank, 번호: (w) => (w.is_admin ? 0 : w.student_no), 이름: (w) => w.student_name, "참여 번호": (w) => w.numbers.map(pad).join(","), 당첨금: (w) => w.prize };
+const E_VAL = { "참여 일시": (e) => e._i, 번호: (e) => e.번호, 이름: (e) => e.이름, "복권 참여 번호": (e) => e["복권 참여 번호"], "맞힌 개수": (e) => e._hit };
+
+function LotteryResult({ p }) {
+  const win = new Set(p.winning_numbers || []);
+  const drawn = p.status === "drawn" && win.size > 0;
+  const winners = [...(p.winners || [])].sort((a, b) => a.rank - b.rank || a.student_no - b.student_no);
+  const ws = useSort(winners, (w, c) => W_VAL[c](w));
+  const ents = (p.entries || []).map((e, i) => ({ ...e, _i: -i, _hit: (e._nums || []).filter((n) => win.has(n)).length }));
+  const es = useSort(ents, (e, c) => E_VAL[c](e));
+  const sum = p.summary && p.summary[0];
+  const rankInfo = [1, 2, 3].map((rk) => {
+    const list = winners.filter((w) => w.rank === rk);
+    return { rk, n: list.length, each: list.length ? list[0].prize : 0, total: list.reduce((a, w) => a + w.prize, 0) };
+  });
+  return (
+    <div className="lot-result">
+      <div className="lot-head">
+        <span className="lot-round">🍀 {p.round_no}회</span>
+        {p.drawn_text ? <span className="lot-meta">{p.drawn_text} 추첨</span> : null}
+        {drawn ? (
+          <span className="lot-balls">
+            <span className="lot-meta">당첨번호</span>
+            {[...win].map((n) => (
+              <span key={n} className="lot-ball">
+                {pad(n)}
+              </span>
+            ))}
+          </span>
+        ) : (
+          <span className="lot-meta">아직 추첨 전</span>
+        )}
+        {sum ? <span className="lot-meta lot-sum">{`참여 ${sum.참여자수}명 · 복권 ${sum["참여 복권수"]}장 · 총 ${sum["총 액수"]}드림`}</span> : null}
+      </div>
+      {drawn ? (
+        <>
+          <div className="lot-ranks">
+            {rankInfo.map((r) => (
+              <div key={r.rk} className={`lot-rank r${r.rk}`}>
+                <div className="lr-t">
+                  {RANK_ICON[r.rk]} {r.rk}등
+                </div>
+                {r.n ? (
+                  <>
+                    <div className="lr-v">{`${r.n}명 · 1인 ${r.each}드림`}</div>
+                    <div className="lr-s">{`합계 ${r.total}드림`}</div>
+                  </>
+                ) : (
+                  <div className="lr-v muted">당첨자 없음</div>
+                )}
+              </div>
+            ))}
+          </div>
+          {winners.length ? (
+            <div className="tbl-wrap">
+              <div className="tbl-scroll">
+                <table className="tbl lot-tbl">
+                  <thead>
+                    <tr>
+                      {Object.keys(W_VAL).map((c) => (
+                        <SortTh key={c} label={c} s={ws} />
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ws.sorted.map((w, i) => (
+                      <tr key={i} className={`rank-${w.rank}`}>
+                        <td>
+                          {RANK_ICON[w.rank]} {w.rank}등
+                        </td>
+                        <td>{w.is_admin ? "-" : w.student_no}</td>
+                        <td>{w.student_name}</td>
+                        <td>
+                          <NumList nums={w.numbers} win={win} />
+                        </td>
+                        <td className="num-cell">{w.is_admin ? `${w.prize} (국고)` : w.prize}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <Info>이 회차는 당첨자가 없습니다.</Info>
+          )}
+        </>
+      ) : null}
+      {ents.length ? (
+        <>
+          <div className="lot-sub">📋 참여자 전체 ({ents.length}장)</div>
+          <div className="tbl-wrap">
+            <div className="tbl-scroll" style={{ maxHeight: 360 }}>
+              <table className="tbl lot-tbl">
+                <thead>
+                  <tr>
+                    {Object.keys(E_VAL)
+                      .filter((c) => drawn || c !== "맞힌 개수")
+                      .map((c) => (
+                        <SortTh key={c} label={c} s={es} />
+                      ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {es.sorted.map((e, i) => (
+                    <tr key={i} className={drawn && e._hit >= 2 ? "hit-row" : ""}>
+                      <td>{e["참여 일시"]}</td>
+                      <td>{e._admin ? "-" : e.번호}</td>
+                      <td>{e.이름}</td>
+                      <td>
+                        <NumList nums={e._nums} win={win} />
+                      </td>
+                      {drawn ? <td className="num-cell">{e._hit}개</td> : null}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      ) : (
+        <Info>선택한 회차의 참여 결과가 없습니다.</Info>
+      )}
+    </div>
+  );
+}
+
 function LotteryAdmin() {
   const app = useApp();
   const [pickId, setPickId] = useState("");
@@ -152,14 +294,7 @@ function LotteryAdmin() {
           />
           {picked && data.picked ? (
             <>
-              {data.picked.entries.length ? (
-                <>
-                  <DataTable rows={data.picked.summary} columns={SUM_COLS} />
-                  <DataTable rows={data.picked.entries} columns={ENTRY_COLS} csvName="복권참여결과" />
-                </>
-              ) : (
-                <Info>선택한 회차의 참여 결과가 없습니다.</Info>
-              )}
+              <LotteryResult key={pickId} p={data.picked} />
               {data.picked.status !== "drawn" ? (
                 <Warning>⚠️ 이 회차는 아직 추첨(당첨번호 제출)이 완료되지 않았습니다. 위 '복권 추첨하기'에서 진행해 주세요.</Warning>
               ) : data.picked.payout_done && data.picked.ledger_applied ? (

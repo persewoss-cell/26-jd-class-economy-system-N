@@ -77,7 +77,7 @@ function participantCount(entries) {
 }
 
 function entryView(entries) {
-  return entries.map((r) => ({ "참여 일시": r.submitted_at_text, 번호: r.student_no, 이름: r.student_name, "복권 참여 번호": r.numbers_text }));
+  return entries.map((r) => ({ "참여 일시": r.submitted_at_text, 번호: r.student_no, 이름: r.student_name, "복권 참여 번호": r.numbers_text, _nums: r.numbers, _admin: !!r.is_admin }));
 }
 
 function summaryView(entries, price) {
@@ -211,6 +211,15 @@ export default {
         out.picked.status = str(pr.status);
         out.picked.payout_done = !!pr.payout_done;
         out.picked.ledger_applied = !!pr.ledger_applied;
+        // 결과 조회용: 회차·추첨일·당첨번호·등수별 당첨자와 당첨금 (관리자 당첨은 국고로)
+        out.picked.round_no = toInt(pr.round_no);
+        out.picked.drawn_text = toDate(pr.drawn_at) ? fmtMd(pr.drawn_at) : "";
+        out.picked.ticket_price = toInt(pr.ticket_price);
+        out.picked.winning_numbers = normNums(pr.winning_numbers);
+        out.picked.winners = (pr.winners || []).map((w) => ({
+          rank: toInt(w.rank), student_no: toInt(w.student_no), student_name: str(w.student_name), numbers: normNums(w.numbers), prize: toInt(w.prize),
+          is_admin: !!w.is_admin || (!str(w.student_id).trim() && str(w.student_name).trim() === ADMIN_NAME),
+        }));
       }
     }
     const led = await db.collection("lottery_admin_ledger").find({}).sort({ round_no: -1 }).limit(200).toArray();

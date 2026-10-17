@@ -583,3 +583,25 @@ table.tbl.log-tbl tbody td { border-bottom-color: rgba(255, 255, 255, 0.75); }
   .inv-hist-table .inv_hist_table_wrap { position: static; height: auto; max-height: 300px; }
   .inv-hist .chart { max-width: 760px; width: 100%; justify-self: center; }
 }
+
+/* 마감된 복권 결과 조회 */
+.lot-result { display: flex; flex-direction: column; gap: 0.75rem; }
+.lot-head { display: flex; align-items: center; gap: 0.9rem; flex-wrap: wrap; background: linear-gradient(90deg, var(--mint-l), var(--lav-l)); border-radius: var(--radius); padding: 0.7rem 1rem; white-space: nowrap; }
+.lot-round { font-family: var(--font-title); font-size: 1.35rem; }
+.lot-meta { color: #5a6578; font-size: 0.9rem; font-weight: 600; }
+.lot-sum { margin-left: auto; }
+.lot-balls { display: inline-flex; align-items: center; gap: 0.35rem; }
+.lot-ball { width: 2.2rem; height: 2.2rem; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: #fff; color: #d0475a; font-weight: 800; font-size: 0.98rem; box-shadow: 0 2px 6px rgba(208, 71, 90, 0.18); border: 2px solid #ffc9cf; font-variant-numeric: tabular-nums; }
+.lot-ranks { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; }
+.lot-rank { border-radius: var(--radius); padding: 0.6rem 0.9rem; background: #fff; border: 1px solid var(--line); white-space: nowrap; }
+.lot-rank.r1 { background: #fff8e1; border-color: #f6e3a6; }
+.lot-rank.r2 { background: #f3f5f8; border-color: #e1e5ec; }
+.lot-rank.r3 { background: #fff1e8; border-color: #f6d9c4; }
+.lot-rank .lr-t { font-family: var(--font-title); font-size: 1.1rem; }
+.lot-rank .lr-v { font-weight: 700; font-size: 0.95rem; }
+.lot-rank .lr-v.muted { color: var(--muted); font-weight: 600; }
+.lot-rank .lr-s { color: var(--muted); font-size: 0.82rem; }
+.lot-hit { color: #e5484d; font-weight: 800; }
+.lot-tbl td { white-space: nowrap; }
+table.tbl.lot-tbl tbody tr.hit-row:nth-child(n) td { background: #fff7e0; }
+.lot-sub { font-weight: 700; color: #5a6578; font-size: 0.92rem; }
