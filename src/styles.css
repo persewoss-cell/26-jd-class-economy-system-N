@@ -521,10 +521,11 @@ table.ledger { border-collapse: separate; border-spacing: 0; font-size: 0.92rem;
 .icon-btn.del:hover { border-color: var(--out); background: var(--out-l); }
 
 /* 로그기록: 묶음 색 구분 + 되돌리기 */
-/* 기본 줄무늬 끔 — 같은 묶음끼리 같은 색(연한 회색 ↔ 흰색 번갈아) */
-table.tbl.log-tbl tbody tr:nth-child(n) td { background: #ffffff; }
-table.tbl.log-tbl tbody tr.grp-shade:nth-child(n) td { background: #eef1f5; }
-table.tbl.log-tbl tbody tr:nth-child(n):hover td { background: var(--mint-l); }
+/* 기본 줄무늬 끔 — 같은 묶음끼리 같은 색 (연한 민트 ↔ 연한 라벤더, 앱 대표색) */
+table.tbl.log-tbl tbody tr:nth-child(n) td { background: #e9f7f2; }
+table.tbl.log-tbl tbody tr.grp-shade:nth-child(n) td { background: #f1edfd; }
+table.tbl.log-tbl tbody tr:nth-child(n):hover td { background: #fff6d6; }
+table.tbl.log-tbl tbody td { border-bottom-color: rgba(255, 255, 255, 0.75); }
 .log-tbl .undo-h { width: 5.2rem; }
 .log-tbl td.undo-cell { text-align: center; vertical-align: middle; border-left: 1px solid #eef1f5; }
 .undo-btn { font-size: 0.9rem; }
